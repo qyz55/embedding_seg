@@ -14,7 +14,13 @@ import sys
 
 
 class Dataset:
-    def __init__(self, train_list, test_list, database_root, store_memory=True, data_aug=False):
+
+    def __init__(self,
+                 train_list,
+                 test_list,
+                 database_root,
+                 store_memory=True,
+                 data_aug=False):
         """Initialize the Dataset object
         Args:
         train_list: TXT file or list with the paths of the images to use for training (Images must be between 0 and 255)
@@ -24,7 +30,9 @@ class Dataset:
         Returns:
         """
         if not store_memory and data_aug:
-            sys.stderr.write('Online data augmentation not supported when the data is not stored in memory!')
+            sys.stderr.write(
+                'Online data augmentation not supported when the data is not stored in memory!'
+            )
             sys.exit()
         # Define types of data augmentation
         data_aug_scales = [0.5, 0.8, 1]
@@ -52,32 +60,45 @@ class Dataset:
         self.labels_train_path = []
         for idx, line in enumerate(train_paths):
             if store_memory:
-                img = Image.open(os.path.join(database_root, str(line.split()[0])))
+                img = Image.open(
+                    os.path.join(database_root, str(line.split()[0])))
                 img.load()
-                label = Image.open(os.path.join(database_root, str(line.split()[1])))
+                label = Image.open(
+                    os.path.join(database_root, str(line.split()[1])))
                 label.load()
                 label = label.split()[0]
                 if data_aug:
-                    if idx == 0: sys.stdout.write('Performing the data augmentation')
+                    if idx == 0:
+                        sys.stdout.write('Performing the data augmentation')
                     for scale in data_aug_scales:
-                        img_size = tuple([int(img.size[0] * scale), int(img.size[1] * scale)])
+                        img_size = tuple([
+                            int(img.size[0] * scale),
+                            int(img.size[1] * scale)
+                        ])
                         img_sc = img.resize(img_size)
                         label_sc = label.resize(img_size)
-                        self.images_train.append(np.array(img_sc, dtype=np.uint8))
-                        self.labels_train.append(np.array(label_sc, dtype=np.uint8))
+                        self.images_train.append(
+                            np.array(img_sc, dtype=np.uint8))
+                        self.labels_train.append(
+                            np.array(label_sc, dtype=np.uint8))
                         if data_aug_flip:
                             img_sc_fl = img_sc.transpose(Image.FLIP_LEFT_RIGHT)
-                            label_sc_fl = label_sc.transpose(Image.FLIP_LEFT_RIGHT)
-                            self.images_train.append(np.array(img_sc_fl, dtype=np.uint8))
-                            self.labels_train.append(np.array(label_sc_fl, dtype=np.uint8))
+                            label_sc_fl = label_sc.transpose(
+                                Image.FLIP_LEFT_RIGHT)
+                            self.images_train.append(
+                                np.array(img_sc_fl, dtype=np.uint8))
+                            self.labels_train.append(
+                                np.array(label_sc_fl, dtype=np.uint8))
                 else:
                     if idx == 0: sys.stdout.write('Loading the data')
                     self.images_train.append(np.array(img, dtype=np.uint8))
                     self.labels_train.append(np.array(label, dtype=np.uint8))
                 if (idx + 1) % 50 == 0:
                     sys.stdout.write('.')
-            self.images_train_path.append(os.path.join(database_root, str(line.split()[0])))
-            self.labels_train_path.append(os.path.join(database_root, str(line.split()[1])))
+            self.images_train_path.append(
+                os.path.join(database_root, str(line.split()[0])))
+            self.labels_train_path.append(
+                os.path.join(database_root, str(line.split()[1])))
         sys.stdout.write('\n')
         self.images_train_path = np.array(self.images_train_path)
         self.labels_train_path = np.array(self.labels_train_path)
@@ -87,17 +108,22 @@ class Dataset:
         self.images_test_path = []
         for idx, line in enumerate(test_paths):
             if store_memory:
-                self.images_test.append(np.array(Image.open(os.path.join(database_root, str(line.split()[0]))),
-                                                 dtype=np.uint8))
+                self.images_test.append(
+                    np.array(
+                        Image.open(
+                            os.path.join(database_root, str(line.split()[0]))),
+                        dtype=np.uint8))
                 if (idx + 1) % 1000 == 0:
-                    print('Loaded ' + str(idx) + ' test images')
-            self.images_test_path.append(os.path.join(database_root, str(line.split()[0])))
+                    print(('Loaded ' + str(idx) + ' test images'))
+            self.images_test_path.append(
+                os.path.join(database_root, str(line.split()[0])))
         print('Done initializing Dataset')
 
         # Init parameters
         self.train_ptr = 0
         self.test_ptr = 0
-        self.train_size = max(len(self.images_train_path), len(self.images_train))
+        self.train_size = max(
+            len(self.images_train_path), len(self.images_train))
         self.test_size = len(self.images_test_path)
         self.train_idx = np.arange(self.train_size)
         np.random.shuffle(self.train_idx)
@@ -117,7 +143,8 @@ class Dataset:
         """
         if phase == 'train':
             if self.train_ptr + batch_size < self.train_size:
-                idx = np.array(self.train_idx[self.train_ptr:self.train_ptr + batch_size])
+                idx = np.array(
+                    self.train_idx[self.train_ptr:self.train_ptr + batch_size])
                 if self.store_memory:
                     images = [self.images_train[l] for l in idx]
                     labels = [self.labels_train[l] for l in idx]
@@ -148,14 +175,20 @@ class Dataset:
             images = None
             if self.test_ptr + batch_size < self.test_size:
                 if self.store_memory:
-                    images = self.images_test[self.test_ptr:self.test_ptr + batch_size]
-                paths = self.images_test_path[self.test_ptr:self.test_ptr + batch_size]
+                    images = self.images_test[self.test_ptr:
+                                              self.test_ptr + batch_size]
+                paths = self.images_test_path[self.test_ptr:
+                                              self.test_ptr + batch_size]
                 self.test_ptr += batch_size
             else:
                 new_ptr = (self.test_ptr + batch_size) % self.test_size
                 if self.store_memory:
-                    images = self.images_test[self.test_ptr:] + self.images_test[:new_ptr]
-                paths = self.images_test_path[self.test_ptr:] + self.images_test_path[:new_ptr]
+                    images = self.images_test[self.
+                                              test_ptr:] + self.images_test[:
+                                                                            new_ptr]
+                paths = self.images_test_path[self.
+                                              test_ptr:] + self.images_test_path[:
+                                                                                 new_ptr]
                 self.test_ptr = new_ptr
             return images, paths
         else:
