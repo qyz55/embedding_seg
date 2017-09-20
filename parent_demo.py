@@ -10,19 +10,19 @@ Please consider citing the paper if you use this code.
 import os
 import sys
 import tensorflow as tf
-slim = tf.contrib.slim
-# Import OSVOS files
-root_folder = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(os.path.abspath(root_folder))
-import osvos
+import embedding
 from dataset import Dataset
 
+slim = tf.contrib.slim
+
 # User defined parameters
-gpu_id = 0
+gpu_id = 1
 
 # Training parameters
 imagenet_ckpt = 'models/vgg_16.ckpt'
-logs_path = os.path.join(root_folder, 'models', 'OSVOS_parent')
+root_folder = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(os.path.abspath(root_folder))
+logs_path = os.path.join(root_folder, 'models', 'embedding')
 store_memory = True
 data_aug = True
 iter_mean_grad = 10
@@ -50,7 +50,7 @@ with tf.Graph().as_default():
         global_step = tf.Variable(0, name='global_step', trainable=False)
         learning_rate = tf.train.piecewise_constant(global_step, boundaries,
                                                     values)
-        osvos.train_parent(
+        embedding.train_parent(
             dataset,
             imagenet_ckpt,
             1,
@@ -70,7 +70,7 @@ with tf.Graph().as_default():
             max_training_iters_1, name='global_step', trainable=False)
         learning_rate = tf.train.piecewise_constant(global_step, boundaries,
                                                     values)
-        osvos.train_parent(
+        embedding.train_parent(
             dataset,
             imagenet_ckpt,
             2,
@@ -91,7 +91,7 @@ with tf.Graph().as_default():
             max_training_iters_2, name='global_step', trainable=False)
         learning_rate = tf.train.piecewise_constant(global_step, boundaries,
                                                     values)
-        osvos.train_parent(
+        embedding.train_parent(
             dataset,
             imagenet_ckpt,
             3,
