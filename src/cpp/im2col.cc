@@ -25,8 +25,8 @@ using shape_inference::DimensionHandle;
 
 Status GetWindowOutputSizeFromDims(
     shape_inference::InferenceContext *c,
-    shape_inference::DimensionHandle input_size, int kernel_size,
-    int stride, int padding, int dilation_rate,
+    shape_inference::DimensionHandle input_size, int kernel_size, int stride,
+    int padding, int dilation_rate,
     shape_inference::DimensionHandle *output_size) {
   TF_RETURN_IF_ERROR(c->Add(input_size, 2 * padding, output_size));
   TF_RETURN_IF_ERROR(c->Subtract(
@@ -157,9 +157,8 @@ class Im2ColOp : public OpKernel {
   void Compute(OpKernelContext *context) override {
     const Tensor &input = context->input(0);
     OP_REQUIRES(context, input.dims() == 4,
-                tensorflow::errors::InvalidArgument(
-                    "Embedding map must have 4 dimension.",
-                    input.shape().DebugString()));
+                errors::InvalidArgument("Embedding map must have 4 dimension.",
+                                        input.shape().DebugString()));
 
     int batch_size = input.dim_size(0);
     int height, width, channels;
@@ -234,14 +233,12 @@ class Im2ColGradOp : public OpKernel {
   void Compute(OpKernelContext *context) override {
     const Tensor &input_size = context->input(0);
     const Tensor &output_grad = context->input(1);
-    OP_REQUIRES(
-        context, output_grad.dims() == 5,
-        tensorflow::errors::InvalidArgument("Column map must have 5 dimension.",
-                                            output_grad.shape().DebugString()));
-    OP_REQUIRES(
-        context, input_size.NumElements() == 4,
-        tensorflow::errors::InvalidArgument("input size must have 4 dimension.",
-                                            input_size.shape().DebugString()));
+    OP_REQUIRES(context, output_grad.dims() == 5,
+                errors::InvalidArgument("Column map must have 5 dimension.",
+                                        output_grad.shape().DebugString()));
+    OP_REQUIRES(context, input_size.NumElements() == 4,
+                errors::InvalidArgument("input size must have 4 elements.",
+                                        input_size.shape().DebugString()));
 
     int batch_size = output_grad.dim_size(0);
     int height, width, channels, wsize;
@@ -260,14 +257,14 @@ class Im2ColGradOp : public OpKernel {
     // << " | channels: " << channels << std::endl;
 
     OP_REQUIRES(context, kernel_size_[0] * kernel_size_[1] == wsize,
-                tensorflow::errors::InvalidArgument(
-                    "wsize does not match", output_grad.shape().DebugString()));
+                errors::InvalidArgument("wsize does not match",
+                                        output_grad.shape().DebugString()));
 
     // LOG(INFO) << "here0" << std::endl;
     auto Tinput_size = input_size.vec<int>();
     TensorShape output_shape;
     for (int i = 0; i < input_size.NumElements(); ++i) {
-      // LOG(INFO) << i << std::endl;
+      // LOG(INFO) << i << " " << Tinput_size(i) << std::endl;
       output_shape.AddDim(Tinput_size(i));
     }
     // LOG(INFO) << "here1" << std::endl;

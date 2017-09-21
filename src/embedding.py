@@ -132,7 +132,9 @@ def _train(dataset,
 
     # Create the network
     fusion_layers = ['conv1', 'conv2', 'conv3']  # FIXME(meijieru): as param
-    embedding, end_points = model.build_model(input_image, fusion_layers)
+    final_embedding, end_points = model.build_model(input_image, fusion_layers)
+    fusion_embeddings = [end_points[key] for key in fusion_layers]
+    fusion_embeddings.append(final_embedding)
 
     # Initialize weights from pre-trained model
     if finetune == 0:
@@ -140,13 +142,14 @@ def _train(dataset,
 
     # Define loss
     with tf.name_scope('losses'):
-        #  TODO(meijieru): multiple embedding loss
         embedding_losses = []
-        for i, key in enumerate(fusion_layers):
+        # TODO(meijieru): im2col may be used once instead of multiple
+        # times for input_label.
+        for i, embedding in enumerate(fusion_embeddings):
             embedding_pos_loss, embedding_neg_loss = ops.dense_siamese_loss(
                 embedding, input_label)
             embedding_loss = embedding_pos_loss + embedding_neg_loss
-            embedding_losses.append()
+            embedding_losses.append(embedding_loss)
             utils.summary_scalar('loss/embedding_pos_loss_{}'.format(i),
                                  embedding_pos_loss)
             utils.summary_scalar('loss/embedding_neg_loss_{}'.format(i),
@@ -159,7 +162,7 @@ def _train(dataset,
 
     # Define optimization method
     with tf.name_scope('optimization'):
-        tf.summary.scalar('learning_rate', learning_rate)
+        utils.summary_scalar('learning_rate', learning_rate)
         optimizer = tf.train.MomentumOptimizer(learning_rate, momentum)
         grads_and_vars = optimizer.compute_gradients(total_loss)
         with tf.name_scope('grad_accumulator'):
@@ -265,11 +268,11 @@ def _train(dataset,
                     # TODO(meijieru)
                     pass
                     #  curr_output = sess.run(
-                        #  img_summary,
-                        #  feed_dict={
-                            #  input_image: preprocess_img(test_image_path)
-                        #  })
-                    #  summary_writer.add_summary(curr_output, step)
+                #  img_summary,
+                #  feed_dict={
+                #  input_image: preprocess_img(test_image_path)
+                #  })
+                #  summary_writer.add_summary(curr_output, step)
                 save_path = saver.save(
                     sess, model_name, global_step=global_step)
                 print("Model saved in file: %s" % save_path)
