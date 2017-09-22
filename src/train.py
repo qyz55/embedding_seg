@@ -27,8 +27,9 @@ max_training_iters_2 = 30000
 max_training_iters_3 = 50000
 save_step = 5000
 test_image = None
-display_step = 100
-learning_rate = 1e-8
+display_step = 1
+learning_rate = 1e-7
+batch_size = 3
 
 # Define Dataset
 data_dir = '/data/VOCdevkit/VOC2012'
@@ -56,5 +57,6 @@ embedding.train_parent(
     save_step,
     display_step,
     global_step,
+    batch_size=batch_size,
     test_image_path=test_image,
     ckpt_name='embedding')

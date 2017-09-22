@@ -127,11 +127,10 @@ def dense_siamese_loss(embeddings,
     center_index = int((w_size - 1) / 2)
 
     with tf.name_scope(scope, 'dense_siamese_loss', [embeddings, label]):
-        with tf.device('/gpu:0'):
-            embedding_matrix = im2col(embeddings, kernel_size, strides, padding,
-                                      dilation_rate)
-            label_matrix = im2col(label, kernel_size, strides, padding,
+        embedding_matrix = im2col(embeddings, kernel_size, strides, padding,
                                   dilation_rate)
+        label_matrix = im2col(label, kernel_size, strides, padding,
+                              dilation_rate)
         mask = tf.cast(
             (label_matrix == label_matrix[:, :, center_index:center_index + 1]),
             tf.float32)
@@ -143,8 +142,8 @@ def dense_siamese_loss(embeddings,
             keep_dims=True)
 
         #  FIXME(meijieru): sum or mean?
-        pos_loss = tf.reduce_sum(
+        pos_loss = tf.reduce_mean(
             mask * tf.maximum(0.0, distance_matrix - alpha))
-        neg_loss = tf.reduce_sum(
+        neg_loss = tf.reduce_mean(
             (1 - mask) * tf.maximum(0.0, beta - distance_matrix))
     return pos_loss, neg_loss

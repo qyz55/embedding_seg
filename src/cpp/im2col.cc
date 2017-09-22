@@ -170,10 +170,6 @@ class Im2ColOp : public OpKernel {
     } else {
       throw std::runtime_error("Unknown data_format: " + data_format_);
     }
-    // TODO(meijieru): delete
-    // LOG(INFO) << "batch: " << batch_size << " | height: " << height
-    // << " | width: " << width << " | channels: " << channels
-    // << std::endl;
 
     const int output_h = (height + 2 * padding_[0] -
                           (dilation_rate_[0] * (kernel_size_[0] - 1) + 1)) /
@@ -250,25 +246,15 @@ class Im2ColGradOp : public OpKernel {
     } else {
       throw std::runtime_error("Unknown data_format: " + data_format_);
     }
-    // TODO(meijieru): delete
-    // LOG(INFO) << "batch: " << batch_size << " | wsize: " << wsize
-    // << " | height: " << height << " | width: " << width
-    // << " | channels: " << channels << std::endl;
 
     OP_REQUIRES(context, kernel_size_[0] * kernel_size_[1] == wsize,
                 errors::InvalidArgument("wsize does not match",
                                         output_grad.shape().DebugString()));
 
     auto Tinput_size = input_size.vec<int>();
-    // TODO(meijieru): delete
-    // LOG(INFO) << "before" << std::endl;
-    // TensorShape output_shape = {2, 2, 4, 4};
     TensorShape output_shape;
-    // FIXME(meijieru): when gpu kernel, the input_size seems to allocated in
-    // GPU, so directly index it will caus segmentfalt.
     OP_REQUIRES_OK(context, TensorShapeUtils::MakeShape(input_size.vec<int32>(),
                                                         &output_shape));
-    // LOG(INFO) << "after" << std::endl;
     Tensor *output = nullptr;
     OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &output));
 
@@ -279,8 +265,6 @@ class Im2ColGradOp : public OpKernel {
     auto im_data = Tinput_grad.data();
 
     const int input_batch_dim = channels * wsize * height * width;
-    // TODO(meijieru): delete
-    // int output_batch_dim = 2 * 4 * 4;
     int output_batch_dim = 1;
     for (int i = 1; i < input_size.NumElements(); ++i) {
       output_batch_dim *= Tinput_size(i);
@@ -302,13 +286,15 @@ class Im2ColGradOp : public OpKernel {
   std::string data_format_;
 };
 
-#define REGISTER_IM2COL_DEVICE(type, device)                                \
-  REGISTER_KERNEL_BUILDER(                                                  \
-      Name("Im2Col").Device(DEVICE_##device).TypeConstraint<type>("T"),     \
-      Im2ColOp<device##Device, type>);                                      \
-  REGISTER_KERNEL_BUILDER(                                                  \
-      Name("Im2ColGrad").Device(DEVICE_##device).TypeConstraint<type>("T"), \
-      Im2ColGradOp<device##Device, type>);
+#define REGISTER_IM2COL_DEVICE(type, device)                            \
+  REGISTER_KERNEL_BUILDER(                                              \
+      Name("Im2Col").Device(DEVICE_##device).TypeConstraint<type>("T"), \
+      Im2ColOp<device##Device, type>);                                  \
+  REGISTER_KERNEL_BUILDER(Name("Im2ColGrad")                            \
+                              .Device(DEVICE_##device)                  \
+                              .TypeConstraint<type>("T")                \
+                              .HostMemory("input_size"),                \
+                          Im2ColGradOp<device##Device, type>);
 
 #define REGISTER_IM2COL(type)        \
   REGISTER_IM2COL_DEVICE(type, CPU); \

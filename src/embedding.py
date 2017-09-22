@@ -9,6 +9,7 @@ Please consider citing the paper if you use this code.
 """
 import sys
 import os
+import time
 from datetime import datetime
 from PIL import Image
 
@@ -82,8 +83,7 @@ def _train(dataset,
     if config is None:
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
-        config.log_device_placement = True
-        config.allow_soft_placement = True
+        #  config.log_device_placement = True
 
     tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -102,6 +102,7 @@ def _train(dataset,
         'vgg_16/conv1/conv1_2', 'vgg_16/conv2/conv2_2', 'vgg_16/conv3/conv3_3'
     ]
     final_embedding, end_points = model.build_model(input_image, fusion_layers)
+    utils.summary_embedding('visual/final_embedding', final_embedding, 2)
 
     # Initialize weights from pre-trained model
     if finetune == 0:
@@ -110,8 +111,6 @@ def _train(dataset,
     # Define loss
     with tf.name_scope('losses'):
         embedding_losses = []
-        # TODO(meijieru): im2col may be used once instead of multiple
-        # times for input_label.
         for i, dilation_rate in enumerate(dilation_rates):
             embedding_pos_loss, embedding_neg_loss = ops.dense_siamese_loss(
                 final_embedding, input_label, kernel_size, strides, padding,
@@ -141,7 +140,8 @@ def _train(dataset,
             grads_and_vars, global_step=global_step)
 
     # Log training info
-    merged_summary_op = tf.summary.merge_all()
+    brief_summary = tf.summary.merge_all('brief')
+    all_summary = tf.summary.merge_all()
 
     # Log evolution of test image
     if test_image_path is not None:
@@ -191,22 +191,24 @@ def _train(dataset,
 
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord, sess=sess)
+        start_time = time.time()
         while step < max_training_iters + 1:
-            print(step)
-            batch_loss, summary, _ = sess.run([total_loss, merged_summary_op] +
+            batch_loss, summary, _ = sess.run([total_loss, brief_summary] +
                                               [train_op])
-            #  batch_loss, summary = sess.run([total_loss, merged_summary_op])
-            print('run')
 
             # Save summary reports
             summary_writer.add_summary(summary, step)
 
             # Display training status
             if step % display_step == 0:
+
+                current_time = time.time()
+                duration = current_time - start_time
                 print(
-                    "{} Iter {}: Training Loss = {:.4f}".format(
-                        datetime.now(), step, batch_loss),
+                    "{} Iter {}: Training Loss = {:.4f}, Duration: {}".format(
+                        datetime.now(), step, batch_loss, duration),
                     file=sys.stderr)
+                start_time = time.time()
 
             # Save a checkpoint
             if step % save_step == 0:
@@ -300,7 +302,6 @@ def test(dataset, checkpoint_file, result_path, config=None):
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         # config.log_device_placement = True
-        config.allow_soft_placement = True
     tf.logging.set_verbosity(tf.logging.INFO)
 
     # Input data

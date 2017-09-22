@@ -87,7 +87,8 @@ def summary_embedding(name, tensor, num_save_images=2, method="pca"):
         name,
         result,
         max_outputs=num_save_images,
-        collections=['detailed', tf.GraphKeys.SUMMARIES])
+        #  collections=['detailed', tf.GraphKeys.SUMMARIES])  # TODO(meijieru)
+        collections=['brief', 'detailed', tf.GraphKeys.SUMMARIES])
 
 
 def pca_np(array, num_images, reduced_dim=3):
