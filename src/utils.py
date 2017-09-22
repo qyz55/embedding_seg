@@ -1,6 +1,8 @@
 import sys
 import tensorflow as tf
-
+from sklearn.decomposition import PCA
+import numpy as np
+from PIL import Image
 
 def get_variables_available_in_checkpoint(variables, checkpoint_path):
     """Returns the subset of variables available in the checkpoint.
@@ -59,14 +61,29 @@ def summary_histogram(name, tensor_or_list):
     tf.summary.histogram(
         name, tensor, collections=['detailed', tf.GraphKeys.SUMMARIES])
 
-
-def summary_embedding(name, tensor, method="pca"):
-    """Visualization use dimension reduction method.
-
+def summary_embedding(sess, name, tensor, method="pca"):
+    """Visualization using dimension reduction method.
     Args:
+        sess: Session used.
         name: name in tensorboard.
         tensor: [b, h, w, c] tensor to be visualized.
         method: method used for dimension reduction.
     """
-    #  TODO(meijieru)
-    pass
+    mask = sess.run(tensor)
+    b, h, w, c = mask.shape
+    output = np.zeros((b, h, w, 3), dtype = uint8)
+    for i in range b:
+        tmp = np.zeros((h*w, c), dtype = float)
+        for j_, j in enumerate(mask[i, :, :, :]):
+            for k_, k in enumerate(j):
+                for l_, l in enumerate(k):
+                    tmp[j_*w + k_, l_] = l
+        pca = PCA(n_components=3)
+        re = pca.fit_transform(tmp)
+        re = re.reshape(h,w,3)
+        re = np.uint8((re-re.min())/(re.max()-re.min())*255)
+        output[i] = np.array(re)
+        #img = Image.fromarray(output[i])
+        #img.save('./mask'+str(i)+'.png')
+    output_tensor = tf.convert_to_tensor(output, dtype = tf.uint8, name = name)
+    tf.summary.image(name, output_tensor,max_outputs = b ,collections=['detailed',tf.GraphKeys.SUMMARIES])
