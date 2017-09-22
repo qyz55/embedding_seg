@@ -61,20 +61,25 @@ def summary_histogram(name, tensor_or_list):
     tf.summary.histogram(
         name, tensor, collections=['detailed', tf.GraphKeys.SUMMARIES])
 
-def summary_embedding(sess, name, tensor, method="pca"):
+def summary_embedding(name, tensor, save_num_images, method="pca"):
     """Visualization using dimension reduction method.
     Args:
-        sess: Session used.
         name: name in tensorboard.
         tensor: [b, h, w, c] tensor to be visualized.
         method: method used for dimension reduction.
     """
-    mask = sess.run(tensor)
-    b, h, w, c = mask.shape
+    embedding_summary = tf.py_func(dimension_reducer, [tensor, save_num_images], tf.uint8)
+    tf.summary.image(name, embedding_summary, 
+                    max_outputs=save_num_images,collections=['detailed',tf.GraphKeys.SUMMARIES])
+
+def dimension_reducer(tensor, num_images):
+    b, h, w, c = tensor.shape
+    assert(b >= num_images), 'Batch size %d should be greater or equal than number of images to save %d.' % (b, num_images)
+    assert(c >= 3), 'Channals of features %d should be greater or equal than 3: the number channels of images to show .' % (c)
     output = np.zeros((b, h, w, 3), dtype = uint8)
     for i in range b:
         tmp = np.zeros((h*w, c), dtype = float)
-        for j_, j in enumerate(mask[i, :, :, :]):
+        for j_, j in enumerate(tensor[i, :, :, :]):
             for k_, k in enumerate(j):
                 for l_, l in enumerate(k):
                     tmp[j_*w + k_, l_] = l
@@ -85,5 +90,4 @@ def summary_embedding(sess, name, tensor, method="pca"):
         output[i] = np.array(re)
         #img = Image.fromarray(output[i])
         #img.save('./mask'+str(i)+'.png')
-    output_tensor = tf.convert_to_tensor(output, dtype = tf.uint8, name = name)
-    tf.summary.image(name, output_tensor,max_outputs = b ,collections=['detailed',tf.GraphKeys.SUMMARIES])
+    return output
