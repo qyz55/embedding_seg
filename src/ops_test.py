@@ -79,13 +79,13 @@ class OpsTestCase(tf.test.TestCase):
         def aux():
             y = ops.im2col(x, kernel_size, strides, padding, dilation_rate)
             with self.test_session():
-                error_cpu = tf.test.compute_gradient_error(
+                error = tf.test.compute_gradient_error(
                     x,
                     ops.get_shape_list(x),
                     y,
                     ops.get_shape_list(y),
                     delta=1e-5)
-                self.assertLess(error_cpu, 1e-7)
+                self.assertLess(error, 1e-7)
 
         with tf.device('/cpu:0'):
             aux()

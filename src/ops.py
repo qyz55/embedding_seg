@@ -44,6 +44,20 @@ def dim_merge(tensor, dims_list):
     return tensor
 
 
+def tf_print(t, first_n=None, prefix=None, show_val=False, summarize=10):
+    """Wrapper for tensorflow print. """
+    to_print = [
+        tf.reduce_mean(t),
+        tf.reduce_min(t),
+        tf.reduce_max(t),
+        tf.shape(t)
+    ]
+    if show_val:
+        to_print.append(t)
+    return tf.Print(
+        t, to_print, message=prefix, first_n=first_n, summarize=summarize)
+
+
 @tf.RegisterGradient("Im2Col")
 def _im2col_grad(op, grad):
     kernel_size = op.get_attr("kernel_size")
@@ -122,10 +136,10 @@ def dense_siamese_loss(embeddings,
     Returns:
         A scalar of total siamese loss.
     """
-    w_size = kernel_size[0] * kernel_size[1]
-    assert w_size % 2 == 1
-    center_index = int((w_size - 1) / 2)
+    assert kernel_size[0] % 2 == 1 and kernel_size[1] % 2 == 1
 
+    w_size = kernel_size[0] * kernel_size[1]
+    center_index = int((w_size - 1) / 2)
     with tf.name_scope(scope, 'dense_siamese_loss', [embeddings, label]):
         embedding_matrix = im2col(embeddings, kernel_size, strides, padding,
                                   dilation_rate)
@@ -138,7 +152,7 @@ def dense_siamese_loss(embeddings,
             embedding_matrix -
             embedding_matrix[:, :, center_index:center_index + 1],
             ord=norm_ord,
-            axis=-1,
+            axis=1,
             keep_dims=True)
 
         #  FIXME(meijieru): sum or mean?

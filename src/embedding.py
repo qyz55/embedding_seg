@@ -102,6 +102,8 @@ def _train(dataset,
         'vgg_16/conv1/conv1_2', 'vgg_16/conv2/conv2_2', 'vgg_16/conv3/conv3_3'
     ]
     final_embedding, end_points = model.build_model(input_image, fusion_layers)
+    #  FIXME(meijieru): delete
+    final_embedding = ops.tf_print(final_embedding, prefix='embedding')
     utils.summary_embedding('visual/final_embedding', final_embedding, 2)
 
     # Initialize weights from pre-trained model
