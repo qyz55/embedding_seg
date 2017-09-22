@@ -23,7 +23,7 @@ def vgg_arg_scope(weight_decay=0.0005):
 
 
 def vgg_embedding(inputs, scope=None):
-    with tf.variable_scope(scope, 'vgg16', [inputs]) as sc:
+    with tf.variable_scope(scope, 'vgg_16', [inputs]) as sc:
         h, w = ops.get_shape_list(inputs)[1:3]
         end_points_collection = sc.name + '_end_points'
         # Collect outputs for conv2d, fully_connected and max_pool2d.
@@ -50,8 +50,8 @@ def add_fusion_embedding(end_points,
                          embedding_size,
                          embedding_depth=64,
                          scope=None):
-    with tf.variable_scope(scope, 'embedding'):
-        fusion_layers = [end_points[key] for key in fusion_layers]
+    fusion_layers = [end_points[key] for key in fusion_layers]
+    with tf.variable_scope(scope, 'embedding', fusion_layers):
         fused = tf.concat(
             [
                 tf.image.resize_images(fmap, embedding_size)
@@ -71,5 +71,5 @@ def build_model(inputs, fusion_layers):
     with slim.arg_scope(vgg_arg_scope()):
         net, end_points = vgg_embedding(inputs)
         embedding = add_fusion_embedding(end_points, fusion_layers,
-                                         ops.get_shape(inputs)[1:3], 64)
+                                         tf.shape(inputs)[1:3], 64)
     return embedding, end_points

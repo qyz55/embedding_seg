@@ -1,4 +1,5 @@
-DAVIS
+experiments/checkpoints
+experiments/data
 /cpp/.ycm_extra_conf.py
 misc
 

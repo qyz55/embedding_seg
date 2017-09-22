@@ -37,10 +37,7 @@ Status GetWindowOutputSizeFromDims(
 }
 
 Status Im2ColShape(shape_inference::InferenceContext *c) {
-  std::vector<int> strides;
-  std::vector<int> kernel_size;
-  std::vector<int> padding;
-  std::vector<int> dilation_rate;
+  std::vector<int> strides, kernel_size, padding, dilation_rate;
   std::string data_format;
   TF_RETURN_IF_ERROR(c->GetAttr("strides", &strides));
   TF_RETURN_IF_ERROR(c->GetAttr("kernel_size", &kernel_size));
@@ -173,6 +170,7 @@ class Im2ColOp : public OpKernel {
     } else {
       throw std::runtime_error("Unknown data_format: " + data_format_);
     }
+    // TODO(meijieru): delete
     // LOG(INFO) << "batch: " << batch_size << " | height: " << height
     // << " | width: " << width << " | channels: " << channels
     // << std::endl;
@@ -252,6 +250,7 @@ class Im2ColGradOp : public OpKernel {
     } else {
       throw std::runtime_error("Unknown data_format: " + data_format_);
     }
+    // TODO(meijieru): delete
     // LOG(INFO) << "batch: " << batch_size << " | wsize: " << wsize
     // << " | height: " << height << " | width: " << width
     // << " | channels: " << channels << std::endl;
@@ -260,14 +259,16 @@ class Im2ColGradOp : public OpKernel {
                 errors::InvalidArgument("wsize does not match",
                                         output_grad.shape().DebugString()));
 
-    // LOG(INFO) << "here0" << std::endl;
     auto Tinput_size = input_size.vec<int>();
+    // TODO(meijieru): delete
+    // LOG(INFO) << "before" << std::endl;
+    // TensorShape output_shape = {2, 2, 4, 4};
     TensorShape output_shape;
-    for (int i = 0; i < input_size.NumElements(); ++i) {
-      // LOG(INFO) << i << " " << Tinput_size(i) << std::endl;
-      output_shape.AddDim(Tinput_size(i));
-    }
-    // LOG(INFO) << "here1" << std::endl;
+    // FIXME(meijieru): when gpu kernel, the input_size seems to allocated in
+    // GPU, so directly index it will caus segmentfalt.
+    OP_REQUIRES_OK(context, TensorShapeUtils::MakeShape(input_size.vec<int32>(),
+                                                        &output_shape));
+    // LOG(INFO) << "after" << std::endl;
     Tensor *output = nullptr;
     OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &output));
 
@@ -278,11 +279,12 @@ class Im2ColGradOp : public OpKernel {
     auto im_data = Tinput_grad.data();
 
     const int input_batch_dim = channels * wsize * height * width;
+    // TODO(meijieru): delete
+    // int output_batch_dim = 2 * 4 * 4;
     int output_batch_dim = 1;
     for (int i = 1; i < input_size.NumElements(); ++i) {
       output_batch_dim *= Tinput_size(i);
     }
-    // LOG(INFO) << "here" << std::endl;
     for (int b = 0; b < batch_size; ++b) {
       caffe::col2im(context->eigen_device<Device>(),
                     col_data + input_batch_dim * b, channels, height, width,
@@ -315,6 +317,7 @@ class Im2ColGradOp : public OpKernel {
 REGISTER_IM2COL(float);
 REGISTER_IM2COL(double);
 REGISTER_IM2COL(int);
+REGISTER_IM2COL(uint8);
 
 #undef REGISTER_IM2COL_DEVICE
 #undef REGISTER_IM2COL

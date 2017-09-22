@@ -79,7 +79,7 @@ def im2col(inputs,
         data_format: ["NCHW", "NHWC"]
 
     Returns:
-        A [b, w_size, n, c] tensor.
+        A [b, c, w_size, oh * ow] tensor.
     """
     if data_format == "NHWC":
         inputs = tf.transpose(inputs, [0, 3, 1, 2])  # NCHW
@@ -91,7 +91,6 @@ def im2col(inputs,
         dilation_rate,
         data_format="NCHW")  # [b, c, w_size, oh, ow]
     result = dim_merge(result, [0, 1, 2, [3, 4]])  # [b, c, w_size, oh * ow]
-    result = tf.transpose(result, [0, 2, 3, 1])
     return result
 
 
@@ -99,11 +98,12 @@ def dense_siamese_loss(embeddings,
                        label,
                        kernel_size,
                        strides=(1, 1),
-                       padding='valid',
+                       padding=(1, 1),
                        dilation_rate=(1, 1),
                        alpha=0.5,
                        beta=2.0,
-                       norm_ord=1):
+                       norm_ord=1,
+                       scope=None):
     """Siamese loss within image.
 
     Encourage positions within the same instance has similar embeddings, while
@@ -126,20 +126,25 @@ def dense_siamese_loss(embeddings,
     assert w_size % 2 == 1
     center_index = int((w_size - 1) / 2)
 
-    embedding_matrix = im2col(embeddings, kernel_size, strides, padding,
-                              dilation_rate)  # [b, w_size, n, c]
-    label_matrix = im2col(label, kernel_size, strides, padding,
-                          dilation_rate)  # [b, w_size, n, 1]
-    mask = tf.cast(
-        (label_matrix == label_matrix[:, center_index:center_index + 1]),
-        tf.float32)
-    distance_matrix = tf.norm(
-        embedding_matrix - embedding_matrix[:, center_index:center_index + 1],
-        ord=norm_ord,
-        axis=-1,
-        keep_dims=True)
+    with tf.name_scope(scope, 'dense_siamese_loss', [embeddings, label]):
+        with tf.device('/gpu:0'):
+            embedding_matrix = im2col(embeddings, kernel_size, strides, padding,
+                                      dilation_rate)
+            label_matrix = im2col(label, kernel_size, strides, padding,
+                                  dilation_rate)
+        mask = tf.cast(
+            (label_matrix == label_matrix[:, :, center_index:center_index + 1]),
+            tf.float32)
+        distance_matrix = tf.norm(
+            embedding_matrix -
+            embedding_matrix[:, :, center_index:center_index + 1],
+            ord=norm_ord,
+            axis=-1,
+            keep_dims=True)
 
-    #  FIXME(meijieru): sum or mean?
-    pos_loss = tf.reduce_sum(mask * tf.maximum(0, distance_matrix - alpha))
-    neg_loss = tf.reduce_sum((1 - mask) * tf.maximum(0, beta - distance_matrix))
+        #  FIXME(meijieru): sum or mean?
+        pos_loss = tf.reduce_sum(
+            mask * tf.maximum(0.0, distance_matrix - alpha))
+        neg_loss = tf.reduce_sum(
+            (1 - mask) * tf.maximum(0.0, beta - distance_matrix))
     return pos_loss, neg_loss

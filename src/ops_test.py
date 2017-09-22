@@ -19,9 +19,9 @@ class OpsTestCase(tf.test.TestCase):
 
         with self.test_session() as sess:
             y_np = sess.run(y)
-            self.assertAllClose(y_np[..., 0], y_np[..., 1])
-            self.assertAllClose(y_np[0, ...], y_np[0, ...])
-            self.assertTupleEqual(y_np.shape, (2, 9, 16, 2))
+            self.assertAllClose(y_np[:, 0], y_np[:, 1])
+            self.assertAllClose(y_np[0, ...], y_np[1, ...])
+            self.assertTupleEqual(y_np.shape, (2, 2, 9, 16))
 
         kernel_size = (2, 2)
         strides = (2, 2)
@@ -31,7 +31,7 @@ class OpsTestCase(tf.test.TestCase):
         x = np.arange(1, 17).reshape([1, 4, 4, 1]).astype(np.float32)
         y = ops.im2col(x, kernel_size, strides, padding, dilation_rate)
         target = np.array([[1, 3, 9, 11.], [2, 4, 10, 12.], [5, 7, 13, 15.],
-                           [6, 8, 14, 16.]]).reshape([1, 4, 4, 1])
+                           [6, 8, 14, 16.]]).reshape([1, 1, 4, 4])
 
         with self.test_session() as sess:
             y_np = sess.run(y)
@@ -50,7 +50,7 @@ class OpsTestCase(tf.test.TestCase):
 
         with self.test_session() as sess:
             y_np = sess.run(y)
-            self.assertAllClose(y_np[0, :, :4, 0], target)
+            self.assertAllClose(y_np[0, 0, :, :4], target)
 
     def test_device_forward(self):
         kernel_size = (3, 3)

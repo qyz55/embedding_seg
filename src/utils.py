@@ -1,4 +1,44 @@
+import sys
 import tensorflow as tf
+
+
+def get_variables_available_in_checkpoint(variables, checkpoint_path):
+    """Returns the subset of variables available in the checkpoint.
+
+    Inspects given checkpoint and returns the subset of variables that are
+    available in it.
+
+    TODO: force input and output to be a dictionary.
+
+    Args:
+        variables: a list or dictionary of variables to find in checkpoint.
+        checkpoint_path: path to the checkpoint to restore variables from.
+
+    Returns:
+        A list or dictionary of variables.
+    Raises:
+        ValueError: if `variables` is not a list or dict.
+    """
+    if isinstance(variables, list):
+        variable_names_map = {
+            variable.op.name: variable
+            for variable in variables
+        }
+    elif isinstance(variables, dict):
+        variable_names_map = variables
+    else:
+        raise ValueError('`variables` is expected to be a list or dict.')
+    ckpt_reader = tf.train.NewCheckpointReader(checkpoint_path)
+    ckpt_vars = ckpt_reader.get_variable_to_shape_map().keys()
+    vars_in_ckpt = {}
+    for variable_name, variable in sorted(variable_names_map.items()):
+        if variable_name in ckpt_vars:
+            vars_in_ckpt[variable_name] = variable
+        else:
+            print('Variable [%s] not available in checkpoint', variable_name, file=sys.stderr)
+    if isinstance(variables, list):
+        return vars_in_ckpt.values()
+    return vars_in_ckpt
 
 
 def summary_scalar(name, scalar):
@@ -18,3 +58,15 @@ def summary_histogram(name, tensor_or_list):
 
     tf.summary.histogram(
         name, tensor, collections=['detailed', tf.GraphKeys.SUMMARIES])
+
+
+def summary_embedding(name, tensor, method="pca"):
+    """Visualization use dimension reduction method.
+
+    Args:
+        name: name in tensorboard.
+        tensor: [b, h, w, c] tensor to be visualized.
+        method: method used for dimension reduction.
+    """
+    #  TODO(meijieru)
+    pass

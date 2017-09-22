@@ -1,4 +1,4 @@
-.PHONY: build
+.PHONY: build, train
 
 build:
 	mkdir -p cpp/build ; \
@@ -7,3 +7,6 @@ build:
 		make ; \
 		cp libembedding.so ../../ ; \
 		cd ../.. ; \
+
+train:
+	CUDA_VISIBLE_DEVICES=0 python train.py

@@ -2,11 +2,14 @@
 #define _CAFFE_UTIL_IM2COL_HPP_
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
+#include "tensorflow/core/framework/op_kernel.h"
 
 namespace caffe {
 
 using CPUDevice = Eigen::ThreadPoolDevice;
 using GPUDevice = Eigen::GpuDevice;
+
+using tensorflow::uint8;
 
 template <typename T>
 void im2col(const CPUDevice& d, const T* data_im, const int channels,

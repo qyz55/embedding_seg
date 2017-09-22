@@ -23,61 +23,25 @@ import ops
 slim = tf.contrib.slim
 
 
-# TO DO: Move preprocessing into Tensorflow
-def preprocess_img(image):
-    """Preprocess the image to adapt it to network requirements
-    Args:
-    Image we want to input the network (W,H,3) numpy array
-    Returns:
-    Image ready to input the network (1,W,H,3)
-    """
-    if type(image) is not np.ndarray:
-        image = np.array(Image.open(image), dtype=np.uint8)
-    in_ = image[:, :, ::-1]
-    in_ = np.subtract(in_,
-                      np.array(
-                          (104.00699, 116.66877, 122.67892), dtype=np.float32))
-    # in_ = tf.subtract(tf.cast(in_, tf.float32), np.array((104.00699, 116.66877, 122.67892), dtype=np.float32))
-    in_ = np.expand_dims(in_, axis=0)
-    # in_ = tf.expand_dims(in_, 0)
-    return in_
-
-
-# TO DO: Move preprocessing into Tensorflow
-def preprocess_labels(label):
-    """Preprocess the labels to adapt them to the loss computation requirements
-    Args:
-    Label corresponding to the input image (W,H) numpy array
-    Returns:
-    Label ready to compute the loss (1,W,H,1)
-    """
-    if type(label) is not np.ndarray:
-        label = np.array(Image.open(label).split()[0], dtype=np.uint8)
-    max_mask = np.max(label) * 0.5
-    label = np.greater(label, max_mask)
-    label = np.expand_dims(np.expand_dims(label, axis=0), axis=3)
-    # label = tf.cast(np.array(label), tf.float32)
-    # max_mask = tf.multiply(tf.reduce_max(label), 0.5)
-    # label = tf.cast(tf.greater(label, max_mask), tf.float32)
-    # label = tf.expand_dims(tf.expand_dims(label, 0), 3)
-    return label
-
-
-def load_vgg_imagenet(ckpt_path, scope_name="vgg16"):
+def load_vgg_imagenet(ckpt_path, scope_name=None):
     """Initialize the network parameters from the VGG-16 pre-trained model provided by TF-SLIM
+
     Args:
-    Path to the checkpoint
+        Path to the checkpoint
+
     Returns:
-    Function that takes a session and initializes the network
+        Function that takes a session and initializes the network
     """
-    reader = tf.train.NewCheckpointReader(ckpt_path)
-    var_to_shape_map = reader.get_variable_to_shape_map()
-    vars_corresp = dict()
-    for v in var_to_shape_map:
-        if "conv" in v:
-            vars_corresp[v] = slim.get_model_variables(
-                v.replace("vgg_16", scope_name))[0]
-    init_fn = slim.assign_from_checkpoint_fn(ckpt_path, vars_corresp)
+    variables_to_restore = {}
+    all_variables = tf.global_variables()
+    for variable in all_variables:
+        var_name = variable.op.name
+        if scope_name is not None:
+            var_name.replace("vgg_16", scope_name)
+        variables_to_restore[var_name] = variable
+    variables_to_restore = (utils.get_variables_available_in_checkpoint(
+        variables_to_restore, ckpt_path))
+    init_fn = slim.assign_from_checkpoint_fn(ckpt_path, variables_to_restore)
     return init_fn
 
 
@@ -89,7 +53,6 @@ def _train(dataset,
            save_step,
            display_step,
            global_step,
-           iter_mean_grad=1,
            batch_size=1,
            momentum=0.9,
            resume_training=False,
@@ -102,39 +65,43 @@ def _train(dataset,
     Args:
         dataset: Reference to a Dataset object instance
         initial_ckpt: Path to the checkpoint to initialize the network (May be parent network or pre-trained Imagenet)
-        supervison: Level of the side outputs supervision: 1-Strong 2-Weak 3-No supervision
         learning_rate: Value for the learning rate. It can be a number or an instance to a learning rate object.
         logs_path: Path to store the checkpoints
         max_training_iters: Number of training iterations
         save_step: A checkpoint will be created every save_steps
         display_step: Information of the training will be displayed every display_steps
         global_step: Reference to a Variable that keeps track of the training steps
-        iter_mean_grad: Number of gradient computations that are average before updating the weights
         batch_size: Size of the training batch
         momentum: Value of the momentum parameter for the Momentum optimizer
         resume_training: Boolean to try to restore from a previous checkpoint (True) or not (False)
         config: Reference to a Configuration object used in the creation of a Session
         finetune: Use to select the type of training, 0 for the parent network and 1 for finetunning
         test_image_path: If image path provided, every save_step the result of the network with this image is stored
-    Returns:
     """
     model_name = os.path.join(logs_path, ckpt_name + ".ckpt")
     if config is None:
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
+        config.log_device_placement = True
         config.allow_soft_placement = True
 
     tf.logging.set_verbosity(tf.logging.INFO)
 
     # Prepare the input data
-    input_image = tf.placeholder(tf.float32, [batch_size, None, None, 3])
-    input_label = tf.placeholder(tf.float32, [batch_size, None, None, 1])
+    image_batch, _, inst_label_batch = dataset.dequeue(batch_size)
+    input_image = image_batch
+    input_label = inst_label_batch
 
     # Create the network
-    fusion_layers = ['conv1', 'conv2', 'conv3']  # FIXME(meijieru): as param
+    # FIXME(meijieru): as param
+    kernel_size = (3, 3)
+    strides = (1, 1)
+    padding = (1, 1)
+    dilation_rates = [(1, 1), (2, 2), (5, 5)]
+    fusion_layers = [
+        'vgg_16/conv1/conv1_2', 'vgg_16/conv2/conv2_2', 'vgg_16/conv3/conv3_3'
+    ]
     final_embedding, end_points = model.build_model(input_image, fusion_layers)
-    fusion_embeddings = [end_points[key] for key in fusion_layers]
-    fusion_embeddings.append(final_embedding)
 
     # Initialize weights from pre-trained model
     if finetune == 0:
@@ -145,9 +112,10 @@ def _train(dataset,
         embedding_losses = []
         # TODO(meijieru): im2col may be used once instead of multiple
         # times for input_label.
-        for i, embedding in enumerate(fusion_embeddings):
+        for i, dilation_rate in enumerate(dilation_rates):
             embedding_pos_loss, embedding_neg_loss = ops.dense_siamese_loss(
-                embedding, input_label)
+                final_embedding, input_label, kernel_size, strides, padding,
+                dilation_rate)
             embedding_loss = embedding_pos_loss + embedding_neg_loss
             embedding_losses.append(embedding_loss)
             utils.summary_scalar('loss/embedding_pos_loss_{}'.format(i),
@@ -156,37 +124,22 @@ def _train(dataset,
                                  embedding_neg_loss)
             utils.summary_scalar('loss/embedding_loss_{}'.format(i),
                                  embedding_loss)
-        total_loss = tf.add_n(embedding_losses) + tf.add_n(
-            tf.losses.get_regularization_losses())
+        embedding_loss = tf.add_n(embedding_losses)
+        l2_loss = tf.add_n(tf.losses.get_regularization_losses())
+        total_loss = embedding_loss + l2_loss
+        utils.summary_scalar('loss/l2_loss', l2_loss)
+        utils.summary_scalar('loss/embedding_loss', embedding_loss)
         utils.summary_scalar('loss/total_loss', total_loss)
 
     # Define optimization method
     with tf.name_scope('optimization'):
         utils.summary_scalar('learning_rate', learning_rate)
         optimizer = tf.train.MomentumOptimizer(learning_rate, momentum)
-        grads_and_vars = optimizer.compute_gradients(total_loss)
-        with tf.name_scope('grad_accumulator'):
-            grad_accumulator = {}
-            for ind in range(0, len(grads_and_vars)):
-                if grads_and_vars[ind][0] is not None:
-                    grad_accumulator[ind] = tf.ConditionalAccumulator(
-                        grads_and_vars[ind][0].dtype)
-        with tf.name_scope('apply_gradient'):
-            layer_lr = parameter_lr()
-            grad_accumulator_ops = []
-            for var_ind, grad_acc in grad_accumulator.items():
-                var_name = str(grads_and_vars[var_ind][1].name).split(':')[0]
-                var_grad = grads_and_vars[var_ind][0]
-                grad_accumulator_ops.append(
-                    grad_acc.apply_grad(
-                        var_grad * layer_lr[var_name], local_step=global_step))
-        with tf.name_scope('take_gradients'):
-            mean_grads_and_vars = []
-            for var_ind, grad_acc in grad_accumulator.items():
-                mean_grads_and_vars.append((grad_acc.take_grad(iter_mean_grad),
-                                            grads_and_vars[var_ind][1]))
-            apply_gradient_op = optimizer.apply_gradients(
-                mean_grads_and_vars, global_step=global_step)
+        grads_and_vars = optimizer.compute_gradients(
+            total_loss, var_list=tf.trainable_variables())
+        train_op = optimizer.apply_gradients(
+            grads_and_vars, global_step=global_step)
+
     # Log training info
     merged_summary_op = tf.summary.merge_all()
 
@@ -235,22 +188,15 @@ def _train(dataset,
         print('Weights initialized')
 
         print('Start training')
-        while step < max_training_iters + 1:
-            # Average the gradient
-            for _ in range(0, iter_mean_grad):
-                batch_image, batch_label = dataset.next_batch(
-                    batch_size, 'train')
-                image = preprocess_img(batch_image[0])
-                label = preprocess_labels(batch_label[0])
-                run_res = sess.run(
-                    [total_loss, merged_summary_op] + grad_accumulator_ops,
-                    feed_dict={input_image: image,
-                               input_label: label})
-                batch_loss = run_res[0]
-                summary = run_res[1]
 
-            # Apply the gradients
-            sess.run(apply_gradient_op)  # Momentum updates here its statistics
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord, sess=sess)
+        while step < max_training_iters + 1:
+            print(step)
+            batch_loss, summary, _ = sess.run([total_loss, merged_summary_op] +
+                                              [train_op])
+            #  batch_loss, summary = sess.run([total_loss, merged_summary_op])
+            print('run')
 
             # Save summary reports
             summary_writer.add_summary(summary, step)
@@ -285,6 +231,9 @@ def _train(dataset,
 
         print('Finished training.')
 
+        coord.request_stop()
+        coord.join(threads)
+
 
 def train_parent(dataset,
                  initial_ckpt,
@@ -295,7 +244,6 @@ def train_parent(dataset,
                  save_step,
                  display_step,
                  global_step,
-                 iter_mean_grad=1,
                  batch_size=1,
                  momentum=0.9,
                  resume_training=False,
@@ -308,10 +256,9 @@ def train_parent(dataset,
     Returns:
     """
     finetune = 0
-    _train(dataset, initial_ckpt, supervison, learning_rate, logs_path,
-           max_training_iters, save_step, display_step, global_step,
-           iter_mean_grad, batch_size, momentum, resume_training, config,
-           finetune, test_image_path, ckpt_name)
+    _train(dataset, initial_ckpt, learning_rate, logs_path, max_training_iters,
+           save_step, display_step, global_step, batch_size, momentum,
+           resume_training, config, finetune, test_image_path, ckpt_name)
 
 
 def train_finetune(dataset,
@@ -323,7 +270,6 @@ def train_finetune(dataset,
                    save_step,
                    display_step,
                    global_step,
-                   iter_mean_grad=1,
                    batch_size=1,
                    momentum=0.9,
                    resume_training=False,
@@ -336,10 +282,9 @@ def train_finetune(dataset,
     Returns:
     """
     finetune = 1
-    _train(dataset, initial_ckpt, supervison, learning_rate, logs_path,
-           max_training_iters, save_step, display_step, global_step,
-           iter_mean_grad, batch_size, momentum, resume_training, config,
-           finetune, test_image_path, ckpt_name)
+    _train(dataset, initial_ckpt, learning_rate, logs_path, max_training_iters,
+           save_step, display_step, global_step, batch_size, momentum,
+           resume_training, config, finetune, test_image_path, ckpt_name)
 
 
 def test(dataset, checkpoint_file, result_path, config=None):
