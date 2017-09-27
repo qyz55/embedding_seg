@@ -69,23 +69,26 @@ class OpsTestCase(tf.test.TestCase):
             self.assertAllClose(lhs, rhs)
 
     def test_im2col_grad(self):
-        kernel_size = (3, 3)
-        strides = (1, 1)
-        padding = (1, 1)
-        dilation_rate = (1, 1)
+        kernel_size_list = [(3, 3)] * 3
+        strides_list = [(1, 1)] * 3
+        padding_list = [(1, 1), (2, 2), (5, 5)]
+        dilation_rate_list = [(1, 1), (2, 2), (5, 5)]
 
         x = tf.Variable(np.random.normal(size=[2, 6, 7, 3]), dtype=tf.float64)
 
         def aux():
-            y = ops.im2col(x, kernel_size, strides, padding, dilation_rate)
-            with self.test_session():
-                error = tf.test.compute_gradient_error(
-                    x,
-                    ops.get_shape_list(x),
-                    y,
-                    ops.get_shape_list(y),
-                    delta=1e-5)
-                self.assertLess(error, 1e-7)
+            for (kernel_size, strides, padding, dilation_rate) in zip(
+                    kernel_size_list, strides_list, padding_list,
+                    dilation_rate_list):
+                y = ops.im2col(x, kernel_size, strides, padding, dilation_rate)
+                with self.test_session():
+                    error = tf.test.compute_gradient_error(
+                        x,
+                        ops.get_shape_list(x),
+                        y,
+                        ops.get_shape_list(y),
+                        delta=1e-5)
+                    self.assertLess(error, 1e-7)
 
         with tf.device('/cpu:0'):
             aux()

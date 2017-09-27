@@ -1,7 +1,19 @@
 import tensorflow as tf
-import ops
+import utils
+from core import ops
 
 slim = tf.contrib.slim
+
+
+def vgg_preprocess_img(resized_inputs):
+    """Preprocess fn for vgg net. """
+    with tf.name_scope('preprocess'):
+        _R_MEAN = 123.68
+        _G_MEAN = 116.78
+        _B_MEAN = 103.94
+        return tf.cast(
+            tf.cast(resized_inputs, dtype=tf.float32) -
+            [_R_MEAN, _G_MEAN, _B_MEAN], tf.float32)
 
 
 def vgg_arg_scope(weight_decay=0.0005):
@@ -70,6 +82,29 @@ def add_fusion_embedding(end_points,
 def build_model(inputs, fusion_layers):
     with slim.arg_scope(vgg_arg_scope()):
         net, end_points = vgg_embedding(inputs)
+        end_points['input'] = inputs
         embedding = add_fusion_embedding(end_points, fusion_layers,
                                          tf.shape(inputs)[1:3], 64)
     return embedding, end_points
+
+
+def load_vgg_imagenet(ckpt_path, scope_name=None):
+    """Initialize the network parameters from the VGG-16 pre-trained model.
+
+    Args:
+        Path to the checkpoint
+
+    Returns:
+        Function that takes a session and initializes the network
+    """
+    variables_to_restore = {}
+    all_variables = tf.global_variables()
+    for variable in all_variables:
+        var_name = variable.op.name
+        if scope_name is not None:
+            var_name.replace("vgg_16", scope_name)
+        variables_to_restore[var_name] = variable
+    variables_to_restore = (utils.get_variables_available_in_checkpoint(
+        variables_to_restore, ckpt_path))
+    init_fn = slim.assign_from_checkpoint_fn(ckpt_path, variables_to_restore)
+    return init_fn

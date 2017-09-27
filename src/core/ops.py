@@ -1,6 +1,8 @@
 import os
 import numpy as np
 import tensorflow as tf
+from sklearn.decomposition import PCA
+import utils
 
 libembedding_path = os.path.join(
     os.path.dirname(os.path.realpath(__file__)), 'libembedding.so')
@@ -46,16 +48,17 @@ def dim_merge(tensor, dims_list):
 
 def tf_print(t, first_n=None, prefix=None, show_val=False, summarize=10):
     """Wrapper for tensorflow print. """
-    to_print = [
-        tf.reduce_mean(t),
-        tf.reduce_min(t),
-        tf.reduce_max(t),
-        tf.shape(t)
-    ]
-    if show_val:
-        to_print.append(t)
-    return tf.Print(
-        t, to_print, message=prefix, first_n=first_n, summarize=summarize)
+    with tf.name_scope('print'):
+        to_print = [
+            tf.reduce_mean(t),
+            tf.reduce_min(t),
+            tf.reduce_max(t),
+            tf.shape(t)
+        ]
+        if show_val:
+            to_print.append(t)
+        return tf.Print(
+            t, to_print, message=prefix, first_n=first_n, summarize=summarize)
 
 
 @tf.RegisterGradient("Im2Col")
@@ -117,6 +120,7 @@ def dense_siamese_loss(embeddings,
                        alpha=0.5,
                        beta=2.0,
                        norm_ord=1,
+                       ignore_label=255,
                        scope=None):
     """Siamese loss within image.
 
@@ -132,6 +136,9 @@ def dense_siamese_loss(embeddings,
         dilation_rate: (dh, dw) tuple.
         alpha: threshold for positive pairs.
         beta: threshold for negative pairs.
+        norm_ord: order of l-p norm.
+        ignore_label: label to be ignored.
+        scope: name of scope.
 
     Returns:
         A scalar of total siamese loss.
@@ -145,9 +152,9 @@ def dense_siamese_loss(embeddings,
                                   dilation_rate)
         label_matrix = im2col(label, kernel_size, strides, padding,
                               dilation_rate)
-        mask = tf.cast(
-            (label_matrix == label_matrix[:, :, center_index:center_index + 1]),
-            tf.float32)
+        #  FIXME(meijieru): some label should be ignored
+        mask = tf.equal(label_matrix,
+                        label_matrix[:, :, center_index:center_index + 1])
         distance_matrix = tf.norm(
             embedding_matrix -
             embedding_matrix[:, :, center_index:center_index + 1],
@@ -155,9 +162,50 @@ def dense_siamese_loss(embeddings,
             axis=1,
             keep_dims=True)
 
-        #  FIXME(meijieru): sum or mean?
-        pos_loss = tf.reduce_mean(
-            mask * tf.maximum(0.0, distance_matrix - alpha))
-        neg_loss = tf.reduce_mean(
-            (1 - mask) * tf.maximum(0.0, beta - distance_matrix))
+        pos_dist = tf.boolean_mask(distance_matrix, mask)
+        pos_loss = tf.reduce_mean(tf.maximum(0.0, pos_dist - alpha))
+        neg_dist = tf.boolean_mask(distance_matrix, tf.logical_not(mask))
+        neg_loss = tf.reduce_mean(tf.maximum(0.0, beta - neg_dist))
+
+        utils.summary_scalar('num/pos', tf.shape(pos_dist)[0])
+        utils.summary_scalar('num/neg', tf.shape(neg_dist)[0])
+        utils.summary_histogram('dist/neg', neg_dist)
+        utils.summary_histogram('dist/pos', pos_dist)
     return pos_loss, neg_loss
+
+
+def embedding(tensor, num_save_images=2, method="pca", epsilon=1e-8):
+    """Visualization using dimension reduction method.
+
+    Args:
+        tensor: [b, h, w, c] tensor to be visualized.
+        num_save_images: number of images to be summaried.
+        method: method used for dimension reduction.
+        epsilon: avoid ZeroDivisionError.
+
+    Returns:
+        A [n, h, w, 3] tensor within range [0, 255].
+    """
+    assert get_shape_list(tensor)[-1] > 3
+    if method == "pca":
+        result = tf.py_func(pca_np, [tensor, num_save_images], tensor.dtype)
+    else:
+        raise ValueError(
+            "Unknown dimension reduction method: {}".format(method))
+    tmin, tmax = tf.reduce_min(tensor), tf.reduce_max(tensor)
+    result = tf.cast((result - tmin) / (tmax - tmin + epsilon) * 255.0,
+                     tf.uint8)
+    return result
+
+
+def pca_np(array, num_images, reduced_dim=3):
+    b, h, w, c = array.shape
+    assert b >= num_images
+    assert c >= 3
+
+    output = np.zeros((num_images, h, w, reduced_dim), dtype=array.dtype)
+    for i in range(num_images):
+        pca = PCA(n_components=3)
+        result = pca.fit_transform(array[i].reshape([-1, c])).reshape([h, w, 3])
+        output[i] = np.array(result)
+    return output

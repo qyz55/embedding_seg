@@ -1,0 +1,55 @@
+{
+    "train_input_config": {
+        "data_dir": "/data/VOCdevkit/VOC2012",
+        "data_list": "../experiments/data/imageset/voc12/train/train.txt",
+        "num_reader": 4,
+        "ignore_label": 255,
+        "input_size": [161, 161]
+    },
+
+    "train_config": {
+        "batch_size": 20,
+        "optimizer_config": {
+            "type": "Adam",
+            "num_steps": 24000,
+            "grad_clip_by_value": 0.0,
+            "learning_rate": {
+                "base_lr": 1e-3
+            }
+        },
+        "augment_config": {
+            "random_scale": false,
+            "random_mirror": false
+        },
+        "restore_from": "../experiments/checkpoints/vgg_16.ckpt",
+        "loss_config": {
+            "kernel_size": [
+                [3, 3],
+                [3, 3],
+                [3, 3]
+            ],
+            "strides": [
+                [1, 1],
+                [1, 1],
+                [1, 1]
+            ],
+            "padding": [
+                [1, 1],
+                [2, 2],
+                [5, 5]
+            ],
+            "dilation_rate": [
+                [1, 1],
+                [2, 2],
+                [5, 5]
+            ],
+            "alpha": 0.5,
+            "beta": 2.0,
+            "norm_ord": 1
+        }
+    },
+
+    "model_config": {
+        "fusion_layers": ["input", "vgg_16/conv1/conv1_2", "vgg_16/conv2/conv2_2", "vgg_16/conv3/conv3_3"]
+    }
+}

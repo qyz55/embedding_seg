@@ -1,9 +1,9 @@
 from __future__ import division
 
+import os
 import sys
+import shutil
 import tensorflow as tf
-from sklearn.decomposition import PCA
-import numpy as np
 
 
 def get_variables_available_in_checkpoint(variables, checkpoint_path):
@@ -67,38 +67,13 @@ def summary_histogram(name, tensor_or_list):
         name, tensor, collections=['detailed', tf.GraphKeys.SUMMARIES])
 
 
-def summary_embedding(name, tensor, num_save_images=2, method="pca"):
-    """Visualization using dimension reduction method.
+def copy_to(src, dst):
+    """Copy file from src to dst.
+
     Args:
-        name: name in tensorboard.
-        tensor: [b, h, w, c] tensor to be visualized.
-        num_save_images: number of images to be summaried.
-        method: method used for dimension reduction.
+        src: path for src file.
+        dst: path for dst directory
     """
-    if method == "pca":
-        result = tf.py_func(pca_np, [tensor, num_save_images], tensor.dtype)
-    else:
-        raise ValueError(
-            "Unknown dimension reduction method: {}".format(method))
-    tmin, tmax = tf.reduce_min(tensor), tf.reduce_max(tensor)
-    result = tf.cast((result - tmin) / (tmax - tmin) * 255.0, tf.uint8)
-
-    tf.summary.image(
-        name,
-        result,
-        max_outputs=num_save_images,
-        #  collections=['detailed', tf.GraphKeys.SUMMARIES])  # TODO(meijieru)
-        collections=['brief', 'detailed', tf.GraphKeys.SUMMARIES])
-
-
-def pca_np(array, num_images, reduced_dim=3):
-    b, h, w, c = array.shape
-    assert b >= num_images
-    assert c >= 3
-
-    output = np.zeros((num_images, h, w, reduced_dim), dtype=array.dtype)
-    for i in range(num_images):
-        pca = PCA(n_components=3)
-        result = pca.fit_transform(array[i].reshape([-1, c])).reshape([h, w, 3])
-        output[i] = np.array(result)
-    return output
+    if not os.path.exists(dst):
+        os.makedirs(dst)
+    shutil.copy(src, dst)

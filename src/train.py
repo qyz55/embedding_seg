@@ -7,56 +7,83 @@ This file is part of the OSVOS paper presented in:
     CVPR 2017
 Please consider citing the paper if you use this code.
 """
-import os
-import sys
+import argparse
+import json
+import random
+from pprint import pprint
 import numpy as np
 import tensorflow as tf
-import embedding
-from reader import ImageReader
+import utils
+from core import embedding
+from dataset.reader_seg import ImageSegmentReader
 
 slim = tf.contrib.slim
 
-# Training parameters
-imagenet_ckpt = '../experiments/checkpoints/vgg_16.ckpt'
-root_folder = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(os.path.abspath(root_folder))
-logs_path = '../experiments/checkpoints/embedding'
-store_memory = True
-max_training_iters_1 = 15000
-max_training_iters_2 = 30000
-max_training_iters_3 = 50000
-save_step = 5000
-test_image = None
-display_step = 1
-learning_rate = 1e-7
-batch_size = 3
 
-# Define Dataset
-data_dir = '/data/VOCdevkit/VOC2012'
-data_list = '../experiments/data/imageset/voc12/train/train.txt'
-input_size = (320, 320)
-random_scale = True
-random_mirror = True
-ignore_label = 255
-IMG_MEAN = np.array(
-    (104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
+def get_arguments():
+    """Parse all the arguments provided from the CLI. """
+    parser = argparse.ArgumentParser(description="FCN detection.")
+    parser.add_argument(
+        "--random-seed",
+        type=int,
+        default=1234,
+        help="Random seed to have reproducible results.")
+    parser.add_argument(
+        "--json-config",
+        type=str,
+        default='experiments/config/default.json',
+        help="Where to load configs.")
+    parser.add_argument(
+        "--num-visual-images",
+        type=int,
+        default=2,
+        help="How many images to save.")
+    parser.add_argument(
+        "--save-pred-every",
+        type=int,
+        default=2000,
+        help="Save checkpoint every often.")
+    parser.add_argument(
+        "--detailed-summary-every",
+        type=int,
+        default=1000,
+        help="Save detailed summaries every often.")
+    parser.add_argument(
+        "--snapshot-dir",
+        type=str,
+        default='./experiments/checkpoints',
+        help="Where to save snapshots of the model.")
+    return parser.parse_args()
+
+
+args = get_arguments()
+utils.copy_to(args.json_config, args.snapshot_dir)
+with open(args.json_config, 'rb') as f:
+    config = json.load(f)
+pprint(vars(args))
+pprint(config)
+
+tf.set_random_seed(args.random_seed)
+np.random.seed(args.random_seed)
+random.seed(args.random_seed)
+
+input_config = config['train_input_config']
+train_config = config['train_config']
+model_config = config['model_config']
+
+augment_config = train_config['augment_config']
 
 with tf.name_scope("create_inputs"):
-    dataset = ImageReader(data_dir, data_list, input_size, random_scale,
-                          random_mirror, ignore_label, IMG_MEAN)
+    dataset = ImageSegmentReader(input_config, augment_config, is_training=True)
 
 # Train the network
 global_step = slim.create_global_step()
 embedding.train_parent(
     dataset,
-    imagenet_ckpt,
-    1,
-    learning_rate,
-    logs_path,
-    max_training_iters_1,
-    save_step,
-    display_step,
-    global_step,
-    batch_size=batch_size,
-    test_image_path=test_image,
-    ckpt_name='embedding')
+    model_config,
+    train_config,
+    args.snapshot_dir,
+    args.num_visual_images,
+    args.save_pred_every,
+    args.detailed_summary_every,
+    global_step)
