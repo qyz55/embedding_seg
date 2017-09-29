@@ -2,7 +2,7 @@ import tensorflow as tf
 import utils
 from core import ops
 from models import meta
-import models.utils as mutils
+from models import common
 
 slim = tf.contrib.slim
 
@@ -71,4 +71,4 @@ class VggEmbeddingModel(meta.EmbeddingModel):
     def preprocess(self, resized_inputs):
         """Preprocess fn for vgg net. """
         with tf.name_scope('preprocess'):
-            return mutils.vgg_preprocess_img(resized_inputs)
+            return common.vgg_preprocess_img(resized_inputs)

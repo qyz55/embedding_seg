@@ -48,6 +48,7 @@
             "beta": 1.2,
             "norm_ord": 1,
             "normalize": "none",
+            "data_balance": false,
             "weight_decay": 1e-6
         }
     },

@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.contrib.slim.nets import resnet_v1
 import utils
 from models import meta
-import models.utils as mutils
+from models import common
 
 slim = tf.contrib.slim
 
@@ -88,7 +88,7 @@ class ResnetEmbeddingModel(meta.EmbeddingModel):
     def preprocess(self, resized_inputs):
         """Preprocess fn for resnet. """
         with tf.name_scope('preprocess'):
-            return mutils.vgg_preprocess_img(resized_inputs)
+            return common.vgg_preprocess_img(resized_inputs)
 
 
 class Resnet50EmbeddingModel(ResnetEmbeddingModel):

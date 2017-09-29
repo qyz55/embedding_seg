@@ -4,9 +4,111 @@ import re
 import tensorflow as tf
 import utils
 from core import ops
-import models.utils as mutils
 
 slim = tf.contrib.slim
+
+
+def weight_l2_loss(weight_decay, scope=None):
+    """Compute l2 loss on weight.
+
+    Args:
+        weight_decay: weight of l2 loss.
+        scope: tf scope.
+
+    Returns:
+        l2_losses: all l2 loss exclude bias term.
+    """
+    with tf.name_scope(scope, 'l2_loss'):
+        l2_losses = tf.add_n([
+            weight_decay * tf.nn.l2_loss(v) for v in tf.trainable_variables()
+            if 'weights' in v.name
+        ])
+    return l2_losses
+
+
+def dense_siamese_loss(embeddings,
+                       label,
+                       kernel_size,
+                       strides=(1, 1),
+                       padding=(1, 1),
+                       dilation_rate=(1, 1),
+                       alpha=0.5,
+                       beta=2.0,
+                       norm_ord=1,
+                       ignore_label=255,
+                       normalize='none',
+                       data_balance=False,
+                       scope=None):
+    """Siamese loss within image.
+
+    Encourage positions within the same instance has similar embeddings, while
+    positions from different instance has large distance.
+
+    Args:
+        embeddings: [b, h, w, c] tensor, embeddings of input images.
+        label: [b, h, w, 1] tensor, instance label of corresponding images.
+        kernel_size: (kh, kw) tuple.
+        strides: (sh, sw) tuple.
+        padding: how to pad the feature map.
+        dilation_rate: (dh, dw) tuple.
+        alpha: threshold for positive pairs.
+        beta: threshold for negative pairs.
+        norm_ord: order of l-p norm.
+        ignore_label: label to be ignored.
+        normalize: method for embedding.
+        data_balance: whether to balance neg/pos ratio.
+        scope: name of scope.
+
+    Returns:
+        A scalar of total siamese loss.
+    """
+    assert kernel_size[0] % 2 == 1 and kernel_size[1] % 2 == 1
+
+    w_size = kernel_size[0] * kernel_size[1]
+    center_index = int((w_size - 1) / 2)
+    with tf.name_scope(scope, 'dense_siamese_loss', [embeddings, label]):
+        if normalize == 'l2':
+            embeddings = tf.nn.l2_normalize(embeddings, 1)
+        elif normalize == 'none':
+            pass
+        else:
+            raise ValueError('Unknown normalize method: {}'.format(normalize))
+
+        embedding_matrix = ops.im2col(embeddings, kernel_size, strides, padding,
+                                      dilation_rate)
+        distance_matrix = tf.norm(
+            embedding_matrix -
+            embedding_matrix[:, :, center_index:center_index + 1],
+            ord=norm_ord,
+            axis=1,
+            keep_dims=True)
+        label_matrix = ops.im2col(label, kernel_size, strides, padding,
+                                  dilation_rate)
+
+        valid_mask = tf.logical_not(
+            tf.logical_or(
+                tf.equal(label_matrix, ignore_label),
+                tf.equal(label_matrix[:, :, center_index:center_index + 1],
+                         255)))
+        mask = tf.equal(label_matrix,
+                        label_matrix[:, :, center_index:center_index + 1])
+        normalizer = tf.to_float(tf.size(mask))
+
+        pos_mask = tf.logical_and(mask, valid_mask)
+        pos_dist = tf.boolean_mask(distance_matrix, pos_mask)
+        pos_loss = tf.reduce_sum(tf.maximum(0.0, pos_dist - alpha))
+        neg_mask = tf.logical_and(tf.logical_not(mask), valid_mask)
+        neg_dist = tf.boolean_mask(distance_matrix, neg_mask)
+        neg_loss = tf.reduce_sum(tf.maximum(0.0, beta - neg_dist))
+        if data_balance:
+            neg_loss = neg_loss * tf.to_float(tf.count_nonzero(
+                pos_mask)) / tf.to_float(tf.count_nonzero(neg_mask))
+
+        utils.summary_scalar('num/pos', tf.count_nonzero(pos_mask))
+        utils.summary_scalar('num/neg', tf.count_nonzero(neg_mask))
+        utils.summary_histogram('dist/neg', neg_dist)
+        utils.summary_histogram('dist/pos', pos_dist)
+    return pos_loss / normalizer, neg_loss / normalizer
 
 
 class EmbeddingModel(object, metaclass=ABCMeta):
@@ -67,7 +169,7 @@ class EmbeddingModel(object, metaclass=ABCMeta):
             for i, (kernel_size, strides, padding, dilation_rate) in enumerate(
                     zip(loss_config['kernel_size'], loss_config['strides'],
                         loss_config['padding'], loss_config['dilation_rate'])):
-                embedding_pos_loss, embedding_neg_loss = ops.dense_siamese_loss(
+                embedding_pos_loss, embedding_neg_loss = dense_siamese_loss(
                     final_embedding,
                     inst_label_batch,
                     kernel_size,
@@ -77,7 +179,8 @@ class EmbeddingModel(object, metaclass=ABCMeta):
                     alpha=loss_config['alpha'],
                     beta=loss_config['beta'],
                     norm_ord=loss_config['norm_ord'],
-                    normalize=loss_config['normalize'])
+                    normalize=loss_config['normalize'],
+                    data_balance=loss_config['data_balance'])
                 embedding_loss = embedding_pos_loss + embedding_neg_loss
                 embedding_losses.append(embedding_loss)
                 utils.summary_scalar('embedding_pos_loss_{}'.format(i),
@@ -87,7 +190,7 @@ class EmbeddingModel(object, metaclass=ABCMeta):
                 utils.summary_scalar('embedding_loss_{}'.format(i),
                                      embedding_loss)
             embedding_loss = tf.add_n(embedding_losses)
-            l2_loss = mutils.l2_loss(loss_config['weight_decay'])
+            l2_loss = weight_l2_loss(loss_config['weight_decay'])
             total_loss = embedding_loss + l2_loss
             utils.summary_scalar('l2_loss', l2_loss)
             utils.summary_scalar('embedding_loss', embedding_loss)
