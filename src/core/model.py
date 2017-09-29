@@ -62,6 +62,15 @@ def add_fusion_embedding(end_points,
                          embedding_size,
                          embedding_depth=64,
                          scope=None):
+
+    def _initializer(shape, seed=None, dtype=tf.float32, partition_info=None):
+        """Initializer for locization's weight.
+
+        Ensure the initial behavior of locization refinement is nearly
+        trivial.
+        """
+        return tf.truncated_normal(shape, 0.0, 1e-6, seed=seed, dtype=dtype)
+
     fusion_layers = [end_points[key] for key in fusion_layers]
     with tf.variable_scope(scope, 'embedding', fusion_layers):
         fused = tf.concat(
@@ -73,18 +82,21 @@ def add_fusion_embedding(end_points,
         embedding = slim.conv2d(
             fused,
             embedding_depth, [1, 1],
+            weights_initializer=_initializer,
             activation_fn=None,
             scope='embedding')
     end_points.update({'embedding': embedding})
     return embedding
 
 
-def build_model(inputs, fusion_layers):
-    with slim.arg_scope(vgg_arg_scope()):
+def build_model(inputs, fusion_layers, weight_decay=5e-4):
+    with slim.arg_scope(vgg_arg_scope(weight_decay=weight_decay)):
         net, end_points = vgg_embedding(inputs)
         end_points['input'] = inputs
         embedding = add_fusion_embedding(end_points, fusion_layers,
                                          tf.shape(inputs)[1:3], 64)
+    for key, val in end_points.items():
+        utils.summary_histogram('output/{}'.format(key), val)
     return embedding, end_points
 
 

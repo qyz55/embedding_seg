@@ -1,3 +1,5 @@
+from __future__ import division
+
 import os
 import numpy as np
 import tensorflow as tf
@@ -121,6 +123,7 @@ def dense_siamese_loss(embeddings,
                        beta=2.0,
                        norm_ord=1,
                        ignore_label=255,
+                       normalize='none',
                        scope=None):
     """Siamese loss within image.
 
@@ -138,6 +141,7 @@ def dense_siamese_loss(embeddings,
         beta: threshold for negative pairs.
         norm_ord: order of l-p norm.
         ignore_label: label to be ignored.
+        normalize: method for embedding.
         scope: name of scope.
 
     Returns:
@@ -148,30 +152,45 @@ def dense_siamese_loss(embeddings,
     w_size = kernel_size[0] * kernel_size[1]
     center_index = int((w_size - 1) / 2)
     with tf.name_scope(scope, 'dense_siamese_loss', [embeddings, label]):
+        if normalize == 'l2':
+            embeddings = tf.nn.l2_normalize(embeddings, 1)
+        elif normalize == 'none':
+            pass
+        else:
+            raise ValueError('Unknown normalize method: {}'.format(normalize))
+
         embedding_matrix = im2col(embeddings, kernel_size, strides, padding,
                                   dilation_rate)
-        label_matrix = im2col(label, kernel_size, strides, padding,
-                              dilation_rate)
-        #  FIXME(meijieru): some label should be ignored
-        mask = tf.equal(label_matrix,
-                        label_matrix[:, :, center_index:center_index + 1])
         distance_matrix = tf.norm(
             embedding_matrix -
             embedding_matrix[:, :, center_index:center_index + 1],
             ord=norm_ord,
             axis=1,
             keep_dims=True)
+        label_matrix = im2col(label, kernel_size, strides, padding,
+                              dilation_rate)
 
-        pos_dist = tf.boolean_mask(distance_matrix, mask)
-        pos_loss = tf.reduce_mean(tf.maximum(0.0, pos_dist - alpha))
-        neg_dist = tf.boolean_mask(distance_matrix, tf.logical_not(mask))
-        neg_loss = tf.reduce_mean(tf.maximum(0.0, beta - neg_dist))
+        valid_mask = tf.logical_not(
+            tf.logical_or(
+                tf.equal(label_matrix, ignore_label),
+                tf.equal(label_matrix[:, :, center_index:center_index + 1],
+                         255)))
+        mask = tf.equal(label_matrix,
+                        label_matrix[:, :, center_index:center_index + 1])
+        normalizer = tf.to_float(tf.size(mask))
 
-        utils.summary_scalar('num/pos', tf.shape(pos_dist)[0])
-        utils.summary_scalar('num/neg', tf.shape(neg_dist)[0])
+        pos_mask = tf.logical_and(mask, valid_mask)
+        pos_dist = tf.boolean_mask(distance_matrix, pos_mask)
+        pos_loss = tf.reduce_sum(tf.maximum(0.0, pos_dist - alpha))
+        neg_mask = tf.logical_and(tf.logical_not(mask), valid_mask)
+        neg_dist = tf.boolean_mask(distance_matrix, neg_mask)
+        neg_loss = tf.reduce_sum(tf.maximum(0.0, beta - neg_dist))
+
+        utils.summary_scalar('num/pos', tf.count_nonzero(pos_mask))
+        utils.summary_scalar('num/neg', tf.count_nonzero(neg_mask))
         utils.summary_histogram('dist/neg', neg_dist)
         utils.summary_histogram('dist/pos', pos_dist)
-    return pos_loss, neg_loss
+    return pos_loss / normalizer, neg_loss / normalizer
 
 
 def embedding(tensor, num_save_images=2, method="pca", epsilon=1e-8):

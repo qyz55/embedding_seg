@@ -1,3 +1,5 @@
+from PIL import Image
+import numpy as np
 import tensorflow as tf
 from dataset.reader import ImageReader
 from dataset import augment
@@ -31,6 +33,17 @@ def read_labeled_image_list(data_dir, data_list):
     return images, class_masks, inst_masks
 
 
+def decode_label(path_tf):
+
+    def aux(path):
+        img = Image.open(path)
+        return np.expand_dims(np.array(img), -1).astype(np.uint8)
+
+    res = tf.py_func(aux, [path_tf], tf.uint8)
+    res.set_shape([None, None, 1])
+    return res
+
+
 def read_images_from_disk(input_queue):
     """Read one image and its corresponding mask with optional pre-processing.
 
@@ -41,12 +54,9 @@ def read_images_from_disk(input_queue):
       Two tensors: the decoded image and its mask.
     """
     img_contents = tf.read_file(input_queue[0])
-    class_label_contents = tf.read_file(input_queue[1])
-    inst_label_contents = tf.read_file(input_queue[2])
-
     img = tf.image.decode_jpeg(img_contents, channels=3)
-    class_label = tf.image.decode_png(class_label_contents, channels=1)
-    inst_label = tf.image.decode_png(inst_label_contents, channels=1)
+    class_label = decode_label(input_queue[1])
+    inst_label = decode_label(input_queue[2])
     return img, class_label, inst_label
 
 
@@ -81,17 +91,23 @@ class ImageSegmentReader(ImageReader):
         self.image, self.class_label, self.inst_label = read_images_from_disk(
             self.queue)
 
+    def _resize_all(self, image, class_label, inst_label):
+        methods = [
+            tf.image.ResizeMethod.BILINEAR,
+            tf.image.ResizeMethod.NEAREST_NEIGHBOR,
+            tf.image.ResizeMethod.NEAREST_NEIGHBOR
+        ]
+        args = [image, class_label, inst_label]
+        return [
+            utils.resize_one_image(val, self.input_size, method)
+            for (val, method) in zip(args, methods)
+        ]
+
     def _not_augmented_data(self):
         """Without data augmentation. """
         if self.input_size:
-            image = utils.resize_one_image(self.image, self.input_size,
-                                           tf.image.ResizeMethod.BILINEAR)
-            class_label = utils.resize_one_image(
-                self.class_label, self.input_size,
-                tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-            inst_label = utils.resize_one_image(
-                self.inst_label, self.input_size,
-                tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+            image, class_label, inst_label = self._resize_all(
+                self.image, self.class_label, self.inst_label)
         return image, class_label, inst_label
 
     def _augmented_data(self):
@@ -114,8 +130,12 @@ class ImageSegmentReader(ImageReader):
                     img, class_label, inst_label)
 
             # Randomly crops the images and labels.
-            (img, class_label,
-             inst_label) = augment.random_crop_and_pad_image_and_labels(
-                 img, class_label, inst_label, h, w, self.ignore_label)
+            if self.augment_config['random_crop']:
+                (img, class_label,
+                 inst_label) = augment.random_crop_and_pad_image_and_labels(
+                     img, class_label, inst_label, h, w, self.ignore_label)
+
+            img, class_label, inst_label = self._resize_all(
+                img, class_label, inst_label)
 
         return img, class_label, inst_label

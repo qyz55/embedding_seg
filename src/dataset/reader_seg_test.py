@@ -46,14 +46,12 @@ class ImageReaderSegTest(tf.test.TestCase):
             img.save(dst_path)
             print('Origin write to: {}'.format(dst_path))
 
-            print(np.unique(cls_label))
             img = dutils.decode_labels(cls_label[None, ...])[0]
             img = Image.fromarray(img.astype(np.uint8))
             dst_path = 'cls_label.png'
             img.save(dst_path)
             print('Origin write to: {}'.format(dst_path))
 
-            print(np.unique(inst_label))
             img = dutils.decode_labels(inst_label[None, ...])[0]
             img = Image.fromarray(img.astype(np.uint8))
             dst_path = 'inst_label.png'

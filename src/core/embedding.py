@@ -57,8 +57,9 @@ def _train(dataset,
     input_label = inst_label_batch
 
     # Create the network
+    loss_config = train_config['loss_config']
     final_embedding, end_points = model.build_model(
-        input_image, model_config['fusion_layers'])
+        input_image, model_config['fusion_layers'], loss_config['weight_decay'])
 
     # Initialize weights from pre-trained model
     initial_ckpt = train_config['restore_from']
@@ -66,7 +67,6 @@ def _train(dataset,
         init_weights = model.load_vgg_imagenet(initial_ckpt)
 
     # Define loss
-    loss_config = train_config['loss_config']
     with tf.name_scope('loss'):
         embedding_losses = []
         for i, (kernel_size, strides, padding, dilation_rate) in enumerate(
@@ -81,7 +81,8 @@ def _train(dataset,
                 dilation_rate,
                 alpha=loss_config['alpha'],
                 beta=loss_config['beta'],
-                norm_ord=loss_config['norm_ord'])
+                norm_ord=loss_config['norm_ord'],
+                normalize=loss_config['normalize'])
             embedding_loss = embedding_pos_loss + embedding_neg_loss
             embedding_losses.append(embedding_loss)
             utils.summary_scalar('embedding_pos_loss_{}'.format(i),
@@ -188,6 +189,11 @@ def _train(dataset,
                 print('Training process finished.')
                 break
 
+            if step % save_step == 0:
+                save_path = saver.save(
+                    sess, model_name, global_step=global_step)
+                print("Model saved in file: %s" % save_path)
+
             if step % detailed_summary_step == 0:
                 batch_loss, summary, _ = sess.run(
                     [total_loss, all_summary, train_op])
@@ -203,11 +209,6 @@ def _train(dataset,
                     datetime.now(), step, batch_loss, duration),
                 file=sys.stderr)
             start_time = time.time()
-
-            if step % save_step == 0:
-                save_path = saver.save(
-                    sess, model_name, global_step=global_step)
-                print("Model saved in file: %s" % save_path)
 
         coord.request_stop()
         coord.join(threads)

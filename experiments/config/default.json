@@ -11,14 +11,15 @@
         "batch_size": 20,
         "optimizer_config": {
             "type": "Adam",
-            "num_steps": 24000,
+            "num_steps": 25000,
             "grad_clip_by_value": 0.0,
             "learning_rate": {
-                "base_lr": 1e-3
+                "base_lr": 1e-5
             }
         },
         "augment_config": {
             "random_scale": false,
+            "random_crop": false,
             "random_mirror": false
         },
         "restore_from": "../experiments/checkpoints/vgg_16.ckpt",
@@ -44,8 +45,10 @@
                 [5, 5]
             ],
             "alpha": 0.5,
-            "beta": 2.0,
-            "norm_ord": 1
+            "beta": 1.2,
+            "norm_ord": 1,
+            "normalize": "none",
+            "weight_decay": 1e-6
         }
     },
 

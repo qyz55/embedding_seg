@@ -37,9 +37,10 @@ pascal_voc_colour_map = [
 
 def resize_one_image(img, new_size, method=ResizeMethod.BILINEAR):
     """Wrapper for tensorflow image_resize for one image. """
-    img = tf.image.resize_images(
+    res = tf.image.resize_images(
         tf.expand_dims(img, axis=0), new_size, method=method)
-    return tf.squeeze(img, axis=0)
+    res = tf.cast(res, img.dtype)
+    return tf.squeeze(res, axis=0)
 
 
 def _batch_map(fun, batch_images):
@@ -71,10 +72,8 @@ def decode_labels(masks, num_images=1, num_classes=21):
             for k_, k in enumerate(j):
                 if k < num_classes:
                     pixels[k_, j_] = pascal_voc_colour_map[k]
-                else:
-                    #  FIXME(meijieru): use palette
-                    k %= num_classes
-                    pixels[k_, j_] = pascal_voc_colour_map[k]
+                elif k == 255:
+                    pixels[k_, j_] = (255,) * 3
         return np.array(img)
 
     return _batch_map(_plot_image, masks[:num_images])
