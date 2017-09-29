@@ -19,7 +19,6 @@ import tensorflow as tf
 import utils
 import dataset.utils as dutils
 from core import builder
-from core import model
 from core import ops
 
 slim = tf.contrib.slim
@@ -53,68 +52,40 @@ def _train(dataset,
     # Prepare the input data
     image_batch, _, inst_label_batch = dataset.dequeue(
         train_config['batch_size'])
-    input_image = model.vgg_preprocess_img(image_batch)
-    input_label = inst_label_batch
 
     # Create the network
-    loss_config = train_config['loss_config']
-    final_embedding, end_points = model.build_model(
-        input_image, model_config['fusion_layers'], loss_config['weight_decay'])
-
-    # Initialize weights from pre-trained model
-    initial_ckpt = train_config['restore_from']
-    if finetune == 0:
-        init_weights = model.load_vgg_imagenet(initial_ckpt)
+    model = builder.build_model(model_config)
+    final_embedding = model.build(
+        model.preprocess(image_batch), is_training=True)
 
     # Define loss
-    with tf.name_scope('loss'):
-        embedding_losses = []
-        for i, (kernel_size, strides, padding, dilation_rate) in enumerate(
-                zip(loss_config['kernel_size'], loss_config['strides'],
-                    loss_config['padding'], loss_config['dilation_rate'])):
-            embedding_pos_loss, embedding_neg_loss = ops.dense_siamese_loss(
-                final_embedding,
-                input_label,
-                kernel_size,
-                strides,
-                padding,
-                dilation_rate,
-                alpha=loss_config['alpha'],
-                beta=loss_config['beta'],
-                norm_ord=loss_config['norm_ord'],
-                normalize=loss_config['normalize'])
-            embedding_loss = embedding_pos_loss + embedding_neg_loss
-            embedding_losses.append(embedding_loss)
-            utils.summary_scalar('embedding_pos_loss_{}'.format(i),
-                                 embedding_pos_loss)
-            utils.summary_scalar('embedding_neg_loss_{}'.format(i),
-                                 embedding_neg_loss)
-            utils.summary_scalar('embedding_loss_{}'.format(i), embedding_loss)
-        embedding_loss = tf.add_n(embedding_losses)
-        l2_loss = tf.add_n(tf.losses.get_regularization_losses())
-        total_loss = embedding_loss + l2_loss
-        utils.summary_scalar('l2_loss', l2_loss)
-        utils.summary_scalar('embedding_loss', embedding_loss)
-        utils.summary_scalar('total_loss', total_loss)
+    loss_config = train_config['loss_config']
+    total_loss = model.loss(loss_config, final_embedding, inst_label_batch)
+    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    update_op = tf.group(*update_ops)
+    with tf.control_dependencies([update_op]):
+        total_loss = tf.identity(total_loss)
 
     # Define optimization method
     optimizer_config = train_config['optimizer_config']
-    opt = builder.build_optimizer(optimizer_config, global_step)
-    all_variables = tf.trainable_variables()
-    grads = tf.gradients(total_loss, all_variables)
     grad_clip_by_value = optimizer_config['grad_clip_by_value']
-    if grad_clip_by_value > 0.0:
-        grads = [
-            tf.clip_by_value(grad, -grad_clip_by_value, grad_clip_by_value)
-            for grad in grads
-        ]
-    train_op = opt.apply_gradients(
-        zip(grads, all_variables), global_step=global_step)
+    all_variables = tf.trainable_variables()
+    with tf.name_scope('optimize'):
+        opt = builder.build_optimizer(optimizer_config, global_step)
+        grads = tf.gradients(total_loss, all_variables)
+        if grad_clip_by_value > 0.0:
+            grads = [
+                tf.clip_by_value(grad, -grad_clip_by_value, grad_clip_by_value)
+                for grad in grads
+            ]
+        train_op = opt.apply_gradients(
+            zip(grads, all_variables), global_step=global_step)
 
     for var in slim.get_model_variables():
         utils.summary_histogram('weight/{}'.format(var.op.name), var)
     for grad in grads:
-        utils.summary_histogram('grad/{}'.format(grad.op.name), grad)
+        if grad is not None:
+            utils.summary_histogram('grad/{}'.format(grad.op.name), grad)
     utils.summary_scalar('global_step', global_step)
 
     with tf.name_scope('visual'):
@@ -161,12 +132,13 @@ def _train(dataset,
             step = global_step.eval() + 1
         else:
             # Load pre-trained model
+            initial_ckpt = train_config['restore_from']
             if finetune == 0:
                 print('Initializing from pre-trained imagenet model...')
+                init_weights = model.restore_fn(initial_ckpt)
                 init_weights(sess)
             else:
                 print('Initializing from specified pre-trained model...')
-                # init_weights(sess)
                 var_list = []
                 for var in tf.global_variables():
                     var_type = var.name.split('/')[-1]

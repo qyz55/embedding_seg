@@ -8,7 +8,7 @@
     },
 
     "train_config": {
-        "batch_size": 20,
+        "batch_size": 12,
         "optimizer_config": {
             "type": "Adam",
             "num_steps": 25000,
@@ -22,7 +22,7 @@
             "random_crop": false,
             "random_mirror": false
         },
-        "restore_from": "../experiments/checkpoints/vgg_16.ckpt",
+        "restore_from": "../experiments/checkpoints/resnet_v1_101.ckpt",
         "loss_config": {
             "kernel_size": [
                 [3, 3],
@@ -53,6 +53,8 @@
     },
 
     "model_config": {
-        "fusion_layers": ["input", "vgg_16/conv1/conv1_2", "vgg_16/conv2/conv2_2", "vgg_16/conv3/conv3_3"]
+        "model_name": "resnet101",
+        "fusion_layers": ["resnet_v1_101/block1", "resnet_v1_101/block2", "resnet_v1_101/block3"],
+        "embedding_depth": 64
     }
 }

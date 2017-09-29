@@ -1,5 +1,8 @@
 import tensorflow as tf
 import utils
+from models.vgg import VggEmbeddingModel
+from models.resnet import Resnet101EmbeddingModel
+from models.resnet import Resnet50EmbeddingModel
 
 
 def build_learning_rate(global_step, lr_config, scope=None):
@@ -40,3 +43,15 @@ def build_optimizer(optimizer_config, global_step):
         base_lr = lr_config['base_lr']
         opt = tf.train.AdamOptimizer(base_lr, beta1=0.9, beta2=0.999)
     return opt
+
+
+model_name_maps = {
+    'vgg': VggEmbeddingModel,
+    'resnet101': Resnet101EmbeddingModel,
+    'resnet50': Resnet50EmbeddingModel
+}
+
+
+def build_model(model_config):
+    cl = model_name_maps[model_config['model_name']]
+    return cl(model_config['fusion_layers'], model_config['embedding_depth'])
