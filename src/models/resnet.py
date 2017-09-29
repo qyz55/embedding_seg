@@ -73,8 +73,6 @@ class ResnetEmbeddingModel(meta.EmbeddingModel):
         self.set_layer('input', preprocessed_img)
         with tf.variable_scope(self._feature_scope, 'embedding',
                                [preprocessed_img]):
-
-            # inputs has shape [batch, 513, 513, 3]
             with slim.arg_scope(resnet_v1.resnet_arg_scope()):
                 net, end_points = self._architecture(
                     preprocessed_img,
@@ -97,7 +95,7 @@ class Resnet50EmbeddingModel(ResnetEmbeddingModel):
     """Resnet-50 embedding model. """
 
     def __init__(self, *args, **kwargs):
-        super(Resnet101EmbeddingModel, self).__init__(
+        super(Resnet50EmbeddingModel, self).__init__(
             *args,
             feature_scope='resnet50',
             architecture=resnet_v1_50_embedding,

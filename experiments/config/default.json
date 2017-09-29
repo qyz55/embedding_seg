@@ -8,13 +8,13 @@
     },
 
     "train_config": {
-        "batch_size": 12,
+        "batch_size": 10,
         "optimizer_config": {
             "type": "Adam",
             "num_steps": 25000,
             "grad_clip_by_value": 0.0,
             "learning_rate": {
-                "base_lr": 1e-5
+                "base_lr": 1e-6
             }
         },
         "augment_config": {
@@ -22,7 +22,7 @@
             "random_crop": false,
             "random_mirror": false
         },
-        "restore_from": "../experiments/checkpoints/resnet_v1_101.ckpt",
+        "restore_from": "../experiments/checkpoints/resnet_v1_50.ckpt",
         "loss_config": {
             "kernel_size": [
                 [3, 3],
@@ -53,8 +53,8 @@
     },
 
     "model_config": {
-        "model_name": "resnet101",
-        "fusion_layers": ["resnet_v1_101/block1", "resnet_v1_101/block2", "resnet_v1_101/block3"],
+        "model_name": "resnet50",
+        "fusion_layers": ["input", "resnet_v1_50/block1", "resnet_v1_50/block2", "resnet_v1_50/block3"],
         "embedding_depth": 64
     }
 }

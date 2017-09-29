@@ -22,6 +22,6 @@ train:
 		--json-config ../experiments/config/default.json \
 		--num-visual-images 2 \
 		--save-pred-every 1000 \
-		--detailed-summary-every 10 \
+		--detailed-summary-every 100 \
 		--snapshot-dir ${CHECKPOINT_DIR} 2>&1 \
 		| tee ${CHECKPOINT_DIR}/train.out -a
