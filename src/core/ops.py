@@ -127,7 +127,8 @@ def embedding(tensor, num_save_images=2, method="pca", epsilon=1e-8):
     """
     assert get_shape_list(tensor)[-1] > 3
     if method == "pca":
-        result = tf.py_func(pca_np, [tensor, num_save_images], tensor.dtype)
+        result = tf.py_func(
+            pca_np, [tensor, num_save_images], tensor.dtype, name='embedding')
     else:
         raise ValueError(
             "Unknown dimension reduction method: {}".format(method))

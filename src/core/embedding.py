@@ -15,6 +15,7 @@ from datetime import datetime
 import numpy as np
 import scipy.misc
 import tensorflow as tf
+from PIL import Image
 
 import utils
 import dataset.utils as dutils
@@ -38,7 +39,7 @@ def _train(dataset,
 
     Args:
         dataset: Reference to a Dataset object instance
-        model_config: config for training.
+        model_config: config for model.
         train_config: config for training.
         logs_path: Path to store the checkpoints
         num_visual_images: number of images to be visualized.
@@ -90,8 +91,9 @@ def _train(dataset,
 
     with tf.name_scope('visual'):
         visual_inst_label = tf.py_func(
-            dutils.decode_labels, [inst_label_batch, num_visual_images,
-                                   21], tf.uint8)
+            dutils.decode_labels, [inst_label_batch, num_visual_images, 21],
+            tf.uint8,
+            name='label')
         values = [
             image_batch[:num_visual_images], visual_inst_label,
             ops.embedding(final_embedding, num_save_images=num_visual_images)
@@ -129,24 +131,17 @@ def _train(dataset,
             # Load last checkpoint
             print('Initializing from previous checkpoint...')
             saver.restore(sess, last_ckpt_path)
-            step = global_step.eval() + 1
         else:
             # Load pre-trained model
             initial_ckpt = train_config['restore_from']
             if finetune == 0:
                 print('Initializing from pre-trained imagenet model...')
                 init_weights = model.restore_fn(initial_ckpt)
-                init_weights(sess)
             else:
                 print('Initializing from specified pre-trained model...')
-                var_list = []
-                for var in tf.global_variables():
-                    var_type = var.name.split('/')[-1]
-                    if 'weights' in var_type or 'bias' in var_type:
-                        var_list.append(var)
-                saver_res = tf.train.Saver(var_list=var_list)
-                saver_res.restore(sess, initial_ckpt)
-            step = 0
+                init_weights = model.restore_fn(
+                    initial_ckpt, from_embedding_checkpoint=True)
+            init_weights(sess)
 
         print('Weights initialized')
         print('Start training')
@@ -182,6 +177,9 @@ def _train(dataset,
                 file=sys.stderr)
             start_time = time.time()
 
+        save_path = saver.save(sess, model_name, global_step=global_step)
+        print("Model saved in file: %s" % save_path)
+
         coord.request_stop()
         coord.join(threads)
 
@@ -196,6 +194,7 @@ def train_parent(dataset,
                  global_step,
                  resume_training=False):
     """Train parent network
+
     Args:
         See _train()
     """
@@ -211,3 +210,72 @@ def train_parent(dataset,
         global_step,
         resume_training=resume_training,
         finetune=finetune)
+
+
+def train_finetune(dataset,
+                   model_config,
+                   train_config,
+                   logs_path,
+                   num_visual_images,
+                   save_step,
+                   detailed_summary_step,
+                   global_step,
+                   resume_training=False):
+    """Finetune network.
+
+    Args:
+        See _train()
+    """
+    finetune = 1
+    _train(
+        dataset,
+        model_config,
+        train_config,
+        logs_path,
+        num_visual_images,
+        save_step,
+        detailed_summary_step,
+        global_step,
+        resume_training=resume_training,
+        finetune=finetune)
+
+
+def test(dataset, model_config, restore_from, result_path):
+    """Test one sequence.
+
+    Args:
+        dataset: Reference to a Dataset object instance.
+        model_config: Config for model.
+        restore_from: Path to checkpoint.
+        result_path: Path to save the output images.
+    """
+    # Prepare the input data
+    image_batch, _, inst_label_batch = dataset.dequeue(1, num_threads=1)
+
+    # Create the network
+    model = builder.build_model(model_config)
+    final_embedding = model.build(
+        model.preprocess(image_batch), is_training=False)
+
+    visual_embedding = ops.embedding(final_embedding, num_save_images=1)[0]
+
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    #  config.log_device_placement = True
+    with tf.Session(config=config) as sess:
+        # Load pre-trained model.
+        init_weights = model.restore_fn(
+            restore_from, from_embedding_checkpoint=True)
+        init_weights(sess)
+
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord, sess=sess)
+
+        num_tests = len(dataset)
+        for i in range(num_tests):
+            visual_embedding_np = sess.run(visual_embedding)
+            img = Image.fromarray(visual_embedding_np)
+            img.save(os.path.join(result_path, 'embedding_{}.png'.format(i)))
+
+        coord.request_stop()
+        coord.join(threads)

@@ -1,3 +1,4 @@
+import os
 from PIL import Image
 import numpy as np
 import tensorflow as tf
@@ -27,9 +28,9 @@ def read_labeled_image_list(data_dir, data_list):
             image, class_mask, inst_mask = line.strip("\n").split(' ')
         except ValueError:  # Adhoc for test.
             image = class_mask = inst_mask = line.strip("\n")
-        images.append(data_dir + image)
-        class_masks.append(data_dir + class_mask)
-        inst_masks.append(data_dir + inst_mask)
+        images.append(data_dir + '/' + image)
+        class_masks.append(data_dir + '/' + class_mask)
+        inst_masks.append(data_dir + '/' + inst_mask)
     return images, class_masks, inst_masks
 
 
@@ -90,6 +91,9 @@ class ImageSegmentReader(ImageReader):
             shuffle=is_training)
         self.image, self.class_label, self.inst_label = read_images_from_disk(
             self.queue)
+
+    def __len__(self):
+        return len(self.image_list)
 
     def _resize_all(self, image, class_label, inst_label):
         methods = [

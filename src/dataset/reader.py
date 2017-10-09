@@ -40,3 +40,7 @@ class ImageReader(object, metaclass=ABCMeta):
     def _augmented_data(self):
         """Apply data augmentation. """
         pass
+
+    @abstractmethod
+    def __len__(self):
+        pass

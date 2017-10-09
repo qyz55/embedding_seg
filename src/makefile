@@ -15,13 +15,24 @@ build:
 		cp libembedding.so ../../core ; \
 		cd ../.. ; \
 
-train:
+train_parent:
 	mkdir -p ${CHECKPOINT_DIR}; \
 		CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} python train.py \
 		--random-seed 1234 \
-		--json-config ../experiments/config/default.json \
+		--json-config ${EXPERIMENT_DIR}/config/resnet101.json \
 		--num-visual-images 2 \
 		--save-pred-every 1000 \
 		--detailed-summary-every 100 \
 		--snapshot-dir ${CHECKPOINT_DIR} 2>&1 \
 		| tee ${CHECKPOINT_DIR}/train.out -a
+
+inference:
+	CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} python inference.py \
+						 --random-seed 1234 \
+						 --json-config ${EXPERIMENT_DIR}/config/resnet101_davis_trivial.json \
+						 --input-base-dir ${EXPERIMENT_DIR}/data/DAVIS2017 \
+						 --sequence-name hike \
+						 --output-dir ${EXPERIMENT_DIR}/output \
+						 --num-visual-images 1 \
+						 --detailed-summary-every 10 \
+						 | tee ${EXPERIMENT_DIR}/output/inference.out

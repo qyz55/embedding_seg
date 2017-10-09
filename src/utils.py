@@ -77,3 +77,21 @@ def copy_to(src, dst):
     if not os.path.exists(dst):
         os.makedirs(dst)
     shutil.copy(src, dst)
+
+
+def construct_dataset(base_dir,
+                      content,
+                      save_path,
+                      num_reader=1,
+                      ignore_label=255,
+                      input_size=(161, 161)):
+    with open(save_path, 'w') as f:
+        f.write('\n'.join(content))
+    input_config = {
+        "data_dir": base_dir,
+        "data_list": save_path,
+        "num_reader": num_reader,
+        "ignore_label": ignore_label,
+        "input_size": input_size
+    }
+    return input_config
