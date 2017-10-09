@@ -1,4 +1,5 @@
 import tensorflow as tf
+from dataset import utils
 
 
 def image_scaling(img, class_label, inst_label):
@@ -13,15 +14,7 @@ def image_scaling(img, class_label, inst_label):
     h_new = tf.to_int32(tf.multiply(tf.to_float(tf.shape(img)[0]), scale))
     w_new = tf.to_int32(tf.multiply(tf.to_float(tf.shape(img)[1]), scale))
     new_shape = tf.squeeze(tf.stack([h_new, w_new]), squeeze_dims=[1])
-    img = tf.image.resize_images(img, new_shape)
-    class_label = tf.image.resize_nearest_neighbor(
-        tf.expand_dims(class_label, 0), new_shape)
-    class_label = tf.squeeze(class_label, squeeze_dims=[0])
-    inst_label = tf.image.resize_nearest_neighbor(
-        tf.expand_dims(inst_label, 0), new_shape)
-    inst_label = tf.squeeze(inst_label, squeeze_dims=[0])
-
-    return img, class_label, inst_label
+    return utils.resize_all(img, class_label, inst_label, new_shape)
 
 
 def image_mirroring(img, class_label, inst_label):

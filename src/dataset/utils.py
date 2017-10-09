@@ -43,6 +43,18 @@ def resize_one_image(img, new_size, method=ResizeMethod.BILINEAR):
     return tf.squeeze(res, axis=0)
 
 
+def resize_all(image, class_label, inst_label, input_size):
+    methods = [
+        tf.image.ResizeMethod.BILINEAR, tf.image.ResizeMethod.NEAREST_NEIGHBOR,
+        tf.image.ResizeMethod.NEAREST_NEIGHBOR
+    ]
+    args = [image, class_label, inst_label]
+    return [
+        resize_one_image(val, input_size, method)
+        for (val, method) in zip(args, methods)
+    ]
+
+
 def _batch_map(fun, batch_images):
     """Map for batch images. """
     n, h, w, c = batch_images.shape

@@ -95,23 +95,11 @@ class ImageSegmentReader(ImageReader):
     def __len__(self):
         return len(self.image_list)
 
-    def _resize_all(self, image, class_label, inst_label):
-        methods = [
-            tf.image.ResizeMethod.BILINEAR,
-            tf.image.ResizeMethod.NEAREST_NEIGHBOR,
-            tf.image.ResizeMethod.NEAREST_NEIGHBOR
-        ]
-        args = [image, class_label, inst_label]
-        return [
-            utils.resize_one_image(val, self.input_size, method)
-            for (val, method) in zip(args, methods)
-        ]
-
     def _not_augmented_data(self):
         """Without data augmentation. """
         if self.input_size:
-            image, class_label, inst_label = self._resize_all(
-                self.image, self.class_label, self.inst_label)
+            image, class_label, inst_label = utils.resize_all(
+                self.image, self.class_label, self.inst_label, self.input_size)
         return image, class_label, inst_label
 
     def _augmented_data(self):
@@ -139,7 +127,7 @@ class ImageSegmentReader(ImageReader):
                  inst_label) = augment.random_crop_and_pad_image_and_labels(
                      img, class_label, inst_label, h, w, self.ignore_label)
 
-            img, class_label, inst_label = self._resize_all(
-                img, class_label, inst_label)
+            img, class_label, inst_label = utils.resize_all(
+                img, class_label, inst_label, self.input_size)
 
         return img, class_label, inst_label
