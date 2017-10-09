@@ -94,7 +94,7 @@ if use_finetune:
             input_config, augment_config, is_training=True)
 
     global_step = slim.create_global_step()
-    embedding.train_finetune(
+    embedding.train_parent(
         dataset,
         model_config,
         train_config,

@@ -10,7 +10,7 @@ def image_scaling(img, class_label, inst_label):
         label: Segmentation mask to scale.
     """
     scale = tf.random_uniform(
-        [1], minval=0.5, maxval=1.5, dtype=tf.float32, seed=None)
+        [1], minval=0.8, maxval=1.2, dtype=tf.float32, seed=None)
     h_new = tf.to_int32(tf.multiply(tf.to_float(tf.shape(img)[0]), scale))
     w_new = tf.to_int32(tf.multiply(tf.to_float(tf.shape(img)[1]), scale))
     new_shape = tf.squeeze(tf.stack([h_new, w_new]), squeeze_dims=[1])
