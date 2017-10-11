@@ -38,17 +38,17 @@ def _train(dataset,
     """Train model.
 
     Args:
-        dataset: Reference to a Dataset object instance
-        model_config: config for model.
-        train_config: config for training.
-        logs_path: Path to store the checkpoints
-        num_visual_images: number of images to be visualized.
-        save_step: A checkpoint will be created every save_steps
-        detailed_summary_step: Information of the training will be displayed every display_steps
-        global_step: Reference to a Variable that keeps track of the training steps
-        resume_training: Boolean to try to restore from a previous checkpoint (True) or not (False)
-        config: Reference to a Configuration object used in the creation of a Session
-        finetune: Use to select the type of training, 0 for the parent network and 1 for finetunning
+        dataset: A dataset object instance.
+        model_config: Config for model.
+        train_config: Config for training.
+        logs_path: Path to store the checkpoints.
+        num_visual_images: Number of images to be visualized.
+        save_step: A checkpoint will be created every save_steps.
+        detailed_summary_step: Information of the training will be displayed every display_steps.
+        global_step: Reference to a Variable that keeps track of the training steps.
+        resume_training: Boolean to try to restore from a previous checkpoint (True) or not (False).
+        config: Reference to a Configuration object used in the creation of a Session.
+        finetune: Use to select the type of training, 0 for the parent network and 1 for finetunning.
     """
     # Prepare the input data
     image_batch, _, inst_label_batch = dataset.dequeue(
@@ -240,7 +240,11 @@ def train_finetune(dataset,
         finetune=finetune)
 
 
-def test(dataset, model_config, restore_from, result_path, loss_config=None):
+def test(dataset,
+         model_config,
+         restore_from,
+         result_path,
+         loss_config=None):
     """Test one sequence.
 
     Args:
@@ -248,6 +252,7 @@ def test(dataset, model_config, restore_from, result_path, loss_config=None):
         model_config: Config for model.
         restore_from: Path to checkpoint.
         result_path: Path to save the output images.
+        loss_config: Config for loss.
     """
     # Prepare the input data
     image_batch, _, inst_label_batch = dataset.dequeue(1, num_threads=1)

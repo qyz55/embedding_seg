@@ -45,11 +45,62 @@
                 [5, 5]
             ],
             "alpha": 0.5,
-            "beta": 1.2,
+            "beta": 2,
             "norm_ord": 1,
             "normalize": "none",
-            "data_balance": false,
+            "ignore_bg_pos": true,
+            "data_balance": true,
             "weight_decay": 1e-6
+        }
+    },
+
+    "eval_config": {
+        "finetune": true,
+        "eval_finetune_config": {
+            "batch_size": 10,
+            "optimizer_config": {
+                "type": "Adam",
+                "num_steps": 200,
+                "grad_clip_by_value": 0.0,
+                "learning_rate": {
+                    "base_lr": 1e-6
+                }
+            },
+            "augment_config": {
+                "random_scale": false,
+                "random_crop": false,
+                "random_mirror": false
+            },
+            "restore_from": "../experiments/checkpoints/resnet_v1_50.ckpt",
+            "loss_config": {
+                "kernel_size": [
+                    [3, 3],
+                    [3, 3],
+                    [3, 3]
+                ],
+                "strides": [
+                    [1, 1],
+                    [1, 1],
+                    [1, 1]
+                ],
+                "padding": [
+                    [1, 1],
+                    [2, 2],
+                    [5, 5]
+                ],
+                "dilation_rate": [
+                    [1, 1],
+                    [2, 2],
+                    [5, 5]
+                ],
+                "alpha": 0.5,
+                "beta": 2,
+                "norm_ord": 1,
+                "normalize": "none",
+                "ignore_bg_pos": true,
+                "data_balance": true,
+                "weight_decay": 1e-6
+            }
         }
     },
 

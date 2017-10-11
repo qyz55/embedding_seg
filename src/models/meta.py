@@ -37,6 +37,7 @@ def dense_siamese_loss(embeddings,
                        norm_ord=1,
                        ignore_label=255,
                        normalize='none',
+                       ignore_bg_pos=False,
                        data_balance=False,
                        scope=None):
     """Siamese loss within image.
@@ -56,6 +57,7 @@ def dense_siamese_loss(embeddings,
         norm_ord: order of l-p norm.
         ignore_label: label to be ignored.
         normalize: method for embedding.
+        ignore_bg_pos: whether or not ignore positive pair from background.
         data_balance: whether to balance neg/pos ratio.
         scope: name of scope.
 
@@ -85,27 +87,29 @@ def dense_siamese_loss(embeddings,
         label_matrix = ops.im2col(label, kernel_size, strides, padding,
                                   dilation_rate)
 
+        label_center = label_matrix[:, :, center_index:center_index + 1]
         valid_mask = tf.logical_not(
             tf.logical_or(
                 tf.equal(label_matrix, ignore_label),
-                tf.equal(label_matrix[:, :, center_index:center_index + 1],
-                         255)))
-        mask = tf.equal(label_matrix,
-                        label_matrix[:, :, center_index:center_index + 1])
-        normalizer = tf.to_float(tf.size(mask))
+                tf.equal(label_center, ignore_label)))
+        mask = tf.equal(label_matrix, label_center)
 
         pos_mask = tf.logical_and(mask, valid_mask)
+        if ignore_bg_pos:
+            pos_mask = tf.logical_and(pos_mask, tf.not_equal(label_center, 0))
         pos_dist = tf.boolean_mask(distance_matrix, pos_mask)
         pos_loss = tf.reduce_sum(tf.maximum(0.0, pos_dist - alpha))
         neg_mask = tf.logical_and(tf.logical_not(mask), valid_mask)
         neg_dist = tf.boolean_mask(distance_matrix, neg_mask)
         neg_loss = tf.reduce_sum(tf.maximum(0.0, beta - neg_dist))
-        if data_balance:
-            neg_loss = neg_loss * tf.to_float(tf.count_nonzero(
-                pos_mask)) / tf.to_float(tf.count_nonzero(neg_mask))
 
-        utils.summary_scalar('num/pos', tf.count_nonzero(pos_mask))
-        utils.summary_scalar('num/neg', tf.count_nonzero(neg_mask))
+        num_pos = tf.count_nonzero(pos_mask)
+        num_neg = tf.count_nonzero(neg_mask)
+        normalizer = tf.to_float(num_pos + num_neg)
+        if data_balance:
+            neg_loss = neg_loss * tf.to_float(num_pos) / tf.to_float(num_neg)
+        utils.summary_scalar('num/pos', num_pos)
+        utils.summary_scalar('num/neg', num_neg)
         utils.summary_histogram('dist/neg', neg_dist)
         utils.summary_histogram('dist/pos', pos_dist)
     return pos_loss / normalizer, neg_loss / normalizer
@@ -180,6 +184,7 @@ class EmbeddingModel(object, metaclass=ABCMeta):
                     beta=loss_config['beta'],
                     norm_ord=loss_config['norm_ord'],
                     normalize=loss_config['normalize'],
+                    ignore_bg_pos=loss_config['ignore_bg_pos'],
                     data_balance=loss_config['data_balance'])
                 embedding_loss = embedding_pos_loss + embedding_neg_loss
                 embedding_losses.append(embedding_loss)

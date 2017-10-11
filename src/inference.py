@@ -119,5 +119,5 @@ with tf.Graph().as_default():
         dataset = ImageSegmentReader(input_config, None, is_training=False)
 
     loss_config = train_config['loss_config']
-    embedding.test(dataset, model_config, ckpt_path, args.output_dir,
-                   loss_config)
+    embedding.test(dataset, model_config, ckpt_path,
+                   os.path.join(snapshot_dir, 'eval'), loss_config)
