@@ -240,7 +240,7 @@ def train_finetune(dataset,
         finetune=finetune)
 
 
-def test(dataset, model_config, restore_from, result_path):
+def test(dataset, model_config, restore_from, result_path, loss_config=None):
     """Test one sequence.
 
     Args:
@@ -258,6 +258,15 @@ def test(dataset, model_config, restore_from, result_path):
         model.preprocess(image_batch), is_training=False)
 
     visual_embedding = ops.embedding(final_embedding, num_save_images=1)[0]
+    fetches = [visual_embedding]
+
+    if loss_config is not None:  # summary
+        model.loss(loss_config, final_embedding, inst_label_batch)
+
+        summary_writer = tf.summary.FileWriter(
+            result_path, graph=tf.get_default_graph())
+        all_summary = tf.summary.merge_all()
+        fetches.append(all_summary)
 
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
@@ -273,7 +282,11 @@ def test(dataset, model_config, restore_from, result_path):
 
         num_tests = len(dataset)
         for i in range(num_tests):
-            visual_embedding_np = sess.run(visual_embedding)
+            outputs = sess.run(fetches)
+            if loss_config is not None:
+                summary_writer.add_summary(outputs[1], i)
+
+            visual_embedding_np = outputs[0]
             img = Image.fromarray(visual_embedding_np)
             img.save(os.path.join(result_path, 'embedding_{}.png'.format(i)))
 

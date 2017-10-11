@@ -118,4 +118,6 @@ with tf.Graph().as_default():
     with tf.name_scope("create_inputs_eval"):
         dataset = ImageSegmentReader(input_config, None, is_training=False)
 
-    embedding.test(dataset, model_config, ckpt_path, args.output_dir)
+    loss_config = train_config['loss_config']
+    embedding.test(dataset, model_config, ckpt_path, args.output_dir,
+                   loss_config)
