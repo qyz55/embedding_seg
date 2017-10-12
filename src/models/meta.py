@@ -1,3 +1,4 @@
+from __future__ import division
 from abc import ABCMeta
 from abc import abstractmethod
 import re
@@ -202,7 +203,7 @@ class EmbeddingModel(object, metaclass=ABCMeta):
             utils.summary_scalar('total_loss', total_loss)
         return total_loss
 
-    def _add_fusion_embedding(self, embedding_size, scope=None):
+    def _add_fusion_embedding(self, embedding_size, scope=None, scale=5.0):
         """Combine several feature into final embedding. """
 
         def _initializer(shape,
@@ -211,7 +212,14 @@ class EmbeddingModel(object, metaclass=ABCMeta):
                          partition_info=None):
             return tf.truncated_normal(shape, 0.0, 1e-6, seed=seed, dtype=dtype)
 
-        fusion_layers = [self.get_layer(key) for key in self._fusion_layers]
+        fusion_layers = []
+        for key in self._fusion_layers:
+            if 'input' in key:
+                # approximately normalize to [0, scale]
+                fusion_layers.append(
+                    (self.get_layer(key) / 255.0 + 0.5) * scale)
+            else:
+                fusion_layers.append(self.get_layer(key))
         with tf.variable_scope(scope, 'embedding', fusion_layers):
             fused = tf.concat(
                 [
