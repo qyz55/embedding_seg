@@ -8,6 +8,7 @@ slim = tf.contrib.slim
 
 
 def resnet_v1_50_embedding(inputs,
+                           num_block=4,
                            num_classes=None,
                            is_training=None,
                            global_pool=True,
@@ -21,7 +22,10 @@ def resnet_v1_50_embedding(inputs,
             'block2', base_depth=128, num_units=4, stride=2),
         resnet_v1.resnet_v1_block(
             'block3', base_depth=256, num_units=6, stride=2),
+        resnet_v1.resnet_v1_block(
+            'block4', base_depth=512, num_units=3, stride=1),
     ]
+    blocks = blocks[:num_block]
     return resnet_v1.resnet_v1(
         inputs,
         blocks,
@@ -35,6 +39,7 @@ def resnet_v1_50_embedding(inputs,
 
 
 def resnet_v1_101_embedding(inputs,
+                            num_block=4,
                             num_classes=None,
                             is_training=None,
                             global_pool=True,
@@ -48,7 +53,10 @@ def resnet_v1_101_embedding(inputs,
             'block2', base_depth=128, num_units=4, stride=2),
         resnet_v1.resnet_v1_block(
             'block3', base_depth=256, num_units=23, stride=2),
+        resnet_v1.resnet_v1_block(
+            'block4', base_depth=512, num_units=3, stride=1),
     ]
+    blocks = blocks[:num_block]
     return resnet_v1.resnet_v1(
         inputs,
         blocks,
@@ -76,14 +84,20 @@ class ResnetEmbeddingModel(meta.EmbeddingModel):
             with slim.arg_scope(resnet_v1.resnet_arg_scope()):
                 net, end_points = self._architecture(
                     preprocessed_img,
+                    num_block=4 if self._seg_branch_config['use'] else 3,
                     is_training=is_training,
+                    output_stride=self._seg_branch_config['output_stride'],
+                    num_classes=self._seg_branch_config['num_class'],
                     global_pool=False)
                 self._end_points.update(end_points)
                 embedding = self._add_fusion_embedding(
                     tf.shape(preprocessed_img)[1:3])
         for key, val in self._end_points.items():
             utils.summary_histogram('output/{}'.format(key), val)
-        return embedding
+        res = {'embedding': embedding}
+        if self._seg_branch_config['use']:
+            res['seg_cls'] = net
+        return res
 
     def preprocess(self, resized_inputs):
         """Preprocess fn for resnet. """

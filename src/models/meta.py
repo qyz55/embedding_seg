@@ -116,18 +116,120 @@ def dense_siamese_loss(embeddings,
     return pos_loss / normalizer, neg_loss / normalizer
 
 
+def multi_scale_dense_siamese_loss(loss_config,
+                                   predict_dict,
+                                   gt_dict,
+                                   scope=None):
+    """Multi-scale dense siamese loss. """
+    if not loss_config['use']:
+        return 0.0
+
+    embeddings = predict_dict['embedding']
+    label = gt_dict['inst_label']
+    with tf.name_scope(scope, 'siamese_loss', [embeddings, label]):
+        embedding_losses = []
+        for i, (kernel_size, strides, padding, dilation_rate) in enumerate(
+                zip(loss_config['kernel_size'], loss_config['strides'],
+                    loss_config['padding'], loss_config['dilation_rate'])):
+            embedding_pos_loss, embedding_neg_loss = dense_siamese_loss(
+                embeddings,
+                gt_dict['inst_label'],
+                kernel_size,
+                strides,
+                padding,
+                dilation_rate,
+                alpha=loss_config['alpha'],
+                beta=loss_config['beta'],
+                norm_ord=loss_config['norm_ord'],
+                normalize=loss_config['normalize'],
+                ignore_bg_pos=loss_config['ignore_bg_pos'],
+                data_balance=loss_config['data_balance'])
+            embedding_loss = embedding_pos_loss + embedding_neg_loss
+            embedding_losses.append(embedding_loss)
+            utils.summary_scalar('embedding_pos_loss_{}'.format(i),
+                                 embedding_pos_loss)
+            utils.summary_scalar('embedding_neg_loss_{}'.format(i),
+                                 embedding_neg_loss)
+            utils.summary_scalar('embedding_loss_{}'.format(i), embedding_loss)
+        embedding_loss = tf.add_n(embedding_losses)
+    return embedding_loss
+
+
+def pixel_neighbor_binary_loss(loss_config, predict_dict, gt_dict, scope=None):
+    """Dense pixel neighbor instance loss.
+    Whether center pixel is from the same instance with its surroundings.
+
+    Args:
+        logits: A [b, h, w, c] predict logits tensor.
+        inst_label: A [b, h, w, 1] instance label tensor.
+        scope: name of scope.
+
+    Returns:
+        A scalar of pixel neighbor instance loss.
+    """
+    if not loss_config['use']:
+        return 0.0
+
+    kernel_size = loss_config['kernel_size']
+    assert kernel_size[0] % 2 == 1 and kernel_size[1] % 2 == 1
+    w_size = kernel_size[0] * kernel_size[1]
+    center_index = int((w_size - 1) / 2)
+
+    logits = predict_dict['seg_cls']
+    inst_label = gt_dict['inst_label']
+    with tf.name_scope(scope, 'pixel_neighbor_binary_loss',
+                       [logits, inst_label]):
+        label = tf.squeeze(
+            ops.im2col(
+                inst_label,
+                kernel_size,
+                loss_config['strides'],
+                loss_config['padding'],
+                loss_config['dilation_rate'],
+                merge_spatial=False),
+            axis=1)  # [b, w_size, oh, ow]
+        label = tf.transpose(label, [0, 2, 3, 1])
+        label_center = label[..., center_index]
+        label = tf.concat(
+            [label[..., :center_index], label[..., center_index + 1:]], axis=-1)
+        label = tf.equal(label_center, label)
+
+        cls_loss = loss_config[
+            'weight'] * tf.nn.sigmoid_cross_entropy_with_logits(
+                labels=label, logits=logits)
+    return cls_loss
+
+
 class EmbeddingModel(object, metaclass=ABCMeta):
     """Abstract base class for embedding model. """
 
-    def __init__(self, fusion_layers, embedding_depth, feature_scope=None):
+    def __init__(self,
+                 fusion_layers,
+                 embedding_depth,
+                 seg_branch_config,
+                 feature_scope=None):
         self._fusion_layers = fusion_layers
         self._embedding_depth = embedding_depth
         self._feature_scope = feature_scope
+        self._seg_branch_config = seg_branch_config
         self._end_points = {}
 
     @abstractmethod
     def build(self, preprocessed_img, is_training=True, scope=None):
-        """Build network and extract final embedding. """
+        """Build network and extract final embedding.
+
+        Args:
+            preprocessed_img: A [b, h, w, 3] float32 tensor.
+            is_training: Option for batch normalization, must be correctly set.
+            scope: name scope.
+
+        Returns:
+            A dict contains at least following field:
+            1) embedding: A [b, ow, ow, c] tensor, final embedding of input
+                images.
+            may contains following field:
+            1) seg_cls: logits for dense prediction.
+        """
         pass
 
     @abstractmethod
@@ -140,6 +242,7 @@ class EmbeddingModel(object, metaclass=ABCMeta):
         return self._end_points['{}/{}'.format(self._feature_scope, name)]
 
     def set_layer(self, name, val):
+        """Add layer to collection. """
         self._end_points['{}/{}'.format(self._feature_scope, name)] = val
 
     def restore_fn(self, ckpt_path, from_embedding_checkpoint=False):
@@ -168,37 +271,18 @@ class EmbeddingModel(object, metaclass=ABCMeta):
                                                  variables_to_restore)
         return init_fn
 
-    def loss(self, loss_config, final_embedding, inst_label_batch):
+    def loss(self, loss_config, predict_dict, gt_dict):
+        """Compute loss for embedding model. """
         with tf.name_scope('loss'):
-            embedding_losses = []
-            for i, (kernel_size, strides, padding, dilation_rate) in enumerate(
-                    zip(loss_config['kernel_size'], loss_config['strides'],
-                        loss_config['padding'], loss_config['dilation_rate'])):
-                embedding_pos_loss, embedding_neg_loss = dense_siamese_loss(
-                    final_embedding,
-                    inst_label_batch,
-                    kernel_size,
-                    strides,
-                    padding,
-                    dilation_rate,
-                    alpha=loss_config['alpha'],
-                    beta=loss_config['beta'],
-                    norm_ord=loss_config['norm_ord'],
-                    normalize=loss_config['normalize'],
-                    ignore_bg_pos=loss_config['ignore_bg_pos'],
-                    data_balance=loss_config['data_balance'])
-                embedding_loss = embedding_pos_loss + embedding_neg_loss
-                embedding_losses.append(embedding_loss)
-                utils.summary_scalar('embedding_pos_loss_{}'.format(i),
-                                     embedding_pos_loss)
-                utils.summary_scalar('embedding_neg_loss_{}'.format(i),
-                                     embedding_neg_loss)
-                utils.summary_scalar('embedding_loss_{}'.format(i),
-                                     embedding_loss)
-            embedding_loss = tf.add_n(embedding_losses)
+            embedding_loss = multi_scale_dense_siamese_loss(
+                loss_config['dense_siamese_loss'], predict_dict, gt_dict)
+            cls_loss = pixel_neighbor_binary_loss(
+                loss_config['pixel_neighbor_binary_loss'], predict_dict,
+                gt_dict)
             l2_loss = weight_l2_loss(loss_config['weight_decay'])
-            total_loss = embedding_loss + l2_loss
+            total_loss = embedding_loss + l2_loss + cls_loss
             utils.summary_scalar('l2_loss', l2_loss)
+            utils.summary_scalar('cls_loss', cls_loss)
             utils.summary_scalar('embedding_loss', embedding_loss)
             utils.summary_scalar('total_loss', total_loss)
         return total_loss

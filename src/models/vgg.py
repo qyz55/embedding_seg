@@ -24,7 +24,7 @@ def vgg_arg_scope():
             return arg_sc
 
 
-def vgg_embedding(inputs, scope=None):
+def vgg_embedding(inputs, build_full_model=False, scope=None):
     with tf.variable_scope(scope, 'vgg_16', [inputs]) as sc:
         h, w = ops.get_shape_list(inputs)[1:3]
         end_points_collection = sc.name + '_end_points'
@@ -41,6 +41,10 @@ def vgg_embedding(inputs, scope=None):
             conv3 = slim.repeat(
                 conv2_pool, 3, slim.conv2d, 256, [3, 3], scope='conv3')
 
+            if build_full_model:
+                #  TODO(meijieru)
+                raise NotImplementedError()
+
             # Convert end_points_collection into a end_point dict.
             end_points = slim.utils.convert_collection_to_dict(
                 end_points_collection)
@@ -53,6 +57,8 @@ class VggEmbeddingModel(meta.EmbeddingModel):
     def __init__(self, *args, **kwargs):
         super(VggEmbeddingModel, self).__init__(
             *args, feature_scope='vgg', **kwargs)
+        if self._seg_branch_config['output_stride'] != 32:
+            raise ValueError('Vgg does not support adjustable `output_stride`')
 
     def build(self, preprocessed_img, is_training=True, scope=None):
         """Build network and extract final embedding. """
@@ -60,13 +66,18 @@ class VggEmbeddingModel(meta.EmbeddingModel):
         with tf.variable_scope(self._feature_scope, 'embedding',
                                [preprocessed_img]):
             with slim.arg_scope(vgg_arg_scope()):
-                net, end_points = vgg_embedding(preprocessed_img)
+                net, end_points = vgg_embedding(
+                    preprocessed_img,
+                    build_full_model=self._seg_branch_config['use'])
                 self._end_points.update(end_points)
                 embedding = self._add_fusion_embedding(
                     tf.shape(preprocessed_img)[1:3])
         for key, val in self._end_points.items():
             utils.summary_histogram('output/{}'.format(key), val)
-        return embedding
+        res = {'embedding': embedding}
+        if self._seg_branch_config['use']:
+            res['seg_cls'] = net
+        return res
 
     def preprocess(self, resized_inputs):
         """Preprocess fn for vgg net. """

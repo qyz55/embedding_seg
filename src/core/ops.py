@@ -86,6 +86,7 @@ def im2col(inputs,
            strides,
            padding,
            dilation_rate,
+           merge_spatial=True,
            data_format="NHWC"):
     """Convert image into matrix.
 
@@ -95,10 +96,12 @@ def im2col(inputs,
         strides: (sh, sw) tuple.
         padding: how to pad the feature map.
         dilation_rate: (dh, dw) tuple.
+        merge_spatial: whether to merge `oh`, `ow` dim.
         data_format: ["NCHW", "NHWC"]
 
     Returns:
-        A [b, c, w_size, oh * ow] tensor.
+        A [b, c, w_size, oh * ow] tensor if merge_spatial, otherwise a [b, c,
+            wsize, oh, ow] tensor.
     """
     if data_format == "NHWC":
         inputs = tf.transpose(inputs, [0, 3, 1, 2])  # NCHW
@@ -109,7 +112,8 @@ def im2col(inputs,
         padding,
         dilation_rate,
         data_format="NCHW")  # [b, c, w_size, oh, ow]
-    result = dim_merge(result, [0, 1, 2, [3, 4]])  # [b, c, w_size, oh * ow]
+    if merge_spatial:
+        result = dim_merge(result, [0, 1, 2, [3, 4]])  # [b, c, w_size, oh * ow]
     return result
 
 

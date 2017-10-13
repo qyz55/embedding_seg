@@ -1,5 +1,6 @@
 {
     "train_input_config": {
+        "dataset_name": "voc2012",
         "data_dir": "/data/VOCdevkit/VOC2012",
         "data_list": "../experiments/data/imageset/voc12/train/train.txt",
         "num_reader": 4,
@@ -24,55 +25,8 @@
         },
         "restore_from": "../experiments/checkpoints/resnet_v1_50.ckpt",
         "loss_config": {
-            "kernel_size": [
-                [3, 3],
-                [3, 3],
-                [3, 3]
-            ],
-            "strides": [
-                [1, 1],
-                [1, 1],
-                [1, 1]
-            ],
-            "padding": [
-                [1, 1],
-                [2, 2],
-                [5, 5]
-            ],
-            "dilation_rate": [
-                [1, 1],
-                [2, 2],
-                [5, 5]
-            ],
-            "alpha": 0.5,
-            "beta": 2,
-            "norm_ord": 1,
-            "normalize": "none",
-            "ignore_bg_pos": true,
-            "data_balance": true,
-            "weight_decay": 1e-6
-        }
-    },
-
-    "eval_config": {
-        "finetune": true,
-        "eval_finetune_config": {
-            "batch_size": 10,
-            "optimizer_config": {
-                "type": "Adam",
-                "num_steps": 200,
-                "grad_clip_by_value": 0.0,
-                "learning_rate": {
-                    "base_lr": 1e-6
-                }
-            },
-            "augment_config": {
-                "random_scale": false,
-                "random_crop": false,
-                "random_mirror": false
-            },
-            "restore_from": "../experiments/checkpoints/resnet_v1_50.ckpt",
-            "loss_config": {
+            "dense_siamese_loss": {
+                "use": true,
                 "kernel_size": [
                     [3, 3],
                     [3, 3],
@@ -99,6 +53,77 @@
                 "normalize": "none",
                 "ignore_bg_pos": true,
                 "data_balance": true,
+                "weight": 1.0
+            },
+            "pixel_neighbor_binary_loss": {
+                "use": false,
+                "kernel_size": [21, 21],
+                "strides": [1, 1],
+                "padding": [10, 10],
+                "dilation_rate": [1, 1],
+                "weight": 1.0
+            },
+            "weight_decay": 1e-6
+        }
+    },
+
+    "eval_config": {
+        "finetune": true,
+        "eval_finetune_config": {
+            "batch_size": 10,
+            "optimizer_config": {
+                "type": "Adam",
+                "num_steps": 200,
+                "grad_clip_by_value": 0.0,
+                "learning_rate": {
+                    "base_lr": 1e-6
+                }
+            },
+            "augment_config": {
+                "random_scale": false,
+                "random_crop": false,
+                "random_mirror": false
+            },
+            "restore_from": "../experiments/checkpoints/resnet_v1_50.ckpt",
+            "loss_config": {
+                "dense_siamese_loss": {
+                    "use": true,
+                    "kernel_size": [
+                        [3, 3],
+                        [3, 3],
+                        [3, 3]
+                    ],
+                    "strides": [
+                        [1, 1],
+                        [1, 1],
+                        [1, 1]
+                    ],
+                    "padding": [
+                        [1, 1],
+                        [2, 2],
+                        [5, 5]
+                    ],
+                    "dilation_rate": [
+                        [1, 1],
+                        [2, 2],
+                        [5, 5]
+                    ],
+                    "alpha": 0.5,
+                    "beta": 2,
+                    "norm_ord": 1,
+                    "normalize": "none",
+                    "ignore_bg_pos": true,
+                    "data_balance": true,
+                    "weight": 1.0
+                },
+                "pixel_neighbor_binary_loss": {
+                    "use": false,
+                    "kernel_size": [21, 21],
+                    "strides": [1, 1],
+                    "padding": [10, 10],
+                    "dilation_rate": [1, 1],
+                    "weight": 1.0
+                },
                 "weight_decay": 1e-6
             }
         }
@@ -107,6 +132,12 @@
     "model_config": {
         "model_name": "resnet50",
         "fusion_layers": ["input", "resnet_v1_50/block1", "resnet_v1_50/block2", "resnet_v1_50/block3"],
-        "embedding_depth": 64
+        "embedding_depth": 64,
+        "seg_branch": {
+            "use": false,
+            "output_stride": 8,
+            "num_class": 440,
+            "weight": 1.0
+        }
     }
 }

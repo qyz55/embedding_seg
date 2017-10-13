@@ -1,19 +1,8 @@
-"""
-Sergi Caelles (scaelles@vision.ee.ethz.ch)
-
-This file is part of the OSVOS paper presented in:
-    Sergi Caelles, Kevis-Kokitsi Maninis, Jordi Pont-Tuset, Laura Leal-Taixe, Daniel Cremers, Luc Van Gool
-    One-Shot Video Object Segmentation
-    CVPR 2017
-Please consider citing the paper if you use this code.
-"""
 import sys
 import os
 import time
 from datetime import datetime
 
-import numpy as np
-import scipy.misc
 import tensorflow as tf
 from PIL import Image
 
@@ -44,24 +33,30 @@ def _train(dataset,
         logs_path: Path to store the checkpoints.
         num_visual_images: Number of images to be visualized.
         save_step: A checkpoint will be created every save_steps.
-        detailed_summary_step: Information of the training will be displayed every display_steps.
-        global_step: Reference to a Variable that keeps track of the training steps.
-        resume_training: Boolean to try to restore from a previous checkpoint (True) or not (False).
-        config: Reference to a Configuration object used in the creation of a Session.
-        finetune: Use to select the type of training, 0 for the parent network and 1 for finetunning.
+        detailed_summary_step: Information of the training will be displayed
+            every display_steps.
+        global_step: Reference to a Variable that keeps track of the training
+            steps.
+        resume_training: Boolean to try to restore from a previous checkpoint
+            (True) or not (False).
+        config: Reference to a Configuration object used in the creation of a
+            Session.
+        finetune: Use to select the type of training, 0 for the parent network
+            and 1 for finetunning.
     """
     # Prepare the input data
-    image_batch, _, inst_label_batch = dataset.dequeue(
+    image_batch, cls_label_batch, inst_label_batch = dataset.dequeue(
         train_config['batch_size'])
+    gt_dict = {'cls_label': cls_label_batch, 'inst_label': inst_label_batch}
 
     # Create the network
     model = builder.build_model(model_config)
-    final_embedding = model.build(
-        model.preprocess(image_batch), is_training=True)
+    predict_dict = model.build(model.preprocess(image_batch), is_training=True)
+    final_embedding = predict_dict['embedding']
 
     # Define loss
     loss_config = train_config['loss_config']
-    total_loss = model.loss(loss_config, final_embedding, inst_label_batch)
+    total_loss = model.loss(loss_config, predict_dict, gt_dict)
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     update_op = tf.group(*update_ops)
     with tf.control_dependencies([update_op]):
@@ -240,11 +235,7 @@ def train_finetune(dataset,
         finetune=finetune)
 
 
-def test(dataset,
-         model_config,
-         restore_from,
-         result_path,
-         loss_config=None):
+def test(dataset, model_config, restore_from, result_path, loss_config=None):
     """Test one sequence.
 
     Args:
@@ -255,18 +246,20 @@ def test(dataset,
         loss_config: Config for loss.
     """
     # Prepare the input data
-    image_batch, _, inst_label_batch = dataset.dequeue(1, num_threads=1)
+    image_batch, cls_label_batch, inst_label_batch = dataset.dequeue(
+        1, num_threads=1)
+    gt_dict = {'cls_label': cls_label_batch, 'inst_label': inst_label_batch}
 
     # Create the network
     model = builder.build_model(model_config)
-    final_embedding = model.build(
-        model.preprocess(image_batch), is_training=False)
+    predict_dict = model.build(model.preprocess(image_batch), is_training=True)
+    final_embedding = predict_dict['embedding']
 
     visual_embedding = ops.embedding(final_embedding, num_save_images=1)[0]
     fetches = [visual_embedding]
 
     if loss_config is not None:  # summary
-        model.loss(loss_config, final_embedding, inst_label_batch)
+        model.loss(loss_config, predict_dict, gt_dict)
 
         summary_writer = tf.summary.FileWriter(
             result_path, graph=tf.get_default_graph())

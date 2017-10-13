@@ -54,4 +54,5 @@ model_name_maps = {
 
 def build_model(model_config):
     cl = model_name_maps[model_config['model_name']]
-    return cl(model_config['fusion_layers'], model_config['embedding_depth'])
+    return cl(model_config['fusion_layers'], model_config['embedding_depth'],
+              model_config['seg_branch'])
