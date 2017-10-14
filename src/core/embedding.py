@@ -14,6 +14,39 @@ from core import ops
 slim = tf.contrib.slim
 
 
+def visual_summary(predict_dict, gt_dict, num_visual_images):
+    image_batch = gt_dict['image']
+    inst_label_batch = gt_dict['inst_label']
+    cls_label_batch = gt_dict['cls_label']
+
+    final_embedding = predict_dict['embedding']
+    cls_logits = predict_dict['cls_logits']
+    inst_logits = predict_dict['inst_logits']
+
+    with tf.name_scope('visual'):
+        visuals = [inst_label_batch, cls_label_batch]
+        if cls_logits is not None:
+            cls_pred = tf.argmax(
+                tf.image.resize_bilinear(cls_logits,
+                                         tf.shape(cls_label_batch)[1:3]),
+                axis=-1)
+            visuals.append(tf.expand_dims(cls_pred, axis=-1))
+        #  TODO(meijieru): visualize of inst prediction
+
+        visuals = [image_batch[:num_visual_images]] + [
+            tf.py_func(
+                dutils.decode_labels, [label, num_visual_images, 21],
+                tf.uint8,
+                name='label') for label in visuals
+        ]
+
+        if final_embedding is not None:
+            visuals.append(
+                ops.embedding(
+                    final_embedding, num_save_images=num_visual_images))
+        tf.summary.image('images', tf.concat(axis=2, values=visuals))
+
+
 def _train(dataset,
            model_config,
            train_config,
@@ -47,20 +80,25 @@ def _train(dataset,
     # Prepare the input data
     image_batch, cls_label_batch, inst_label_batch = dataset.dequeue(
         train_config['batch_size'])
-    gt_dict = {'cls_label': cls_label_batch, 'inst_label': inst_label_batch}
+    gt_dict = {
+        'image': image_batch,
+        'cls_label': cls_label_batch,
+        'inst_label': inst_label_batch
+    }
 
     # Create the network
     model = builder.build_model(model_config)
-    predict_dict = model.build(model.preprocess(image_batch), is_training=True)
-    final_embedding = predict_dict['embedding']
+    predict_dict = model.build(
+        model.preprocess(image_batch), is_training=model_config['is_training'])
 
     # Define loss
     loss_config = train_config['loss_config']
     total_loss = model.loss(loss_config, predict_dict, gt_dict)
-    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    update_op = tf.group(*update_ops)
-    with tf.control_dependencies([update_op]):
-        total_loss = tf.identity(total_loss)
+    if model_config['is_training']:
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        update_op = tf.group(*update_ops)
+        with tf.control_dependencies([update_op]):
+            total_loss = tf.identity(total_loss)
 
     # Define optimization method
     optimizer_config = train_config['optimizer_config']
@@ -83,17 +121,7 @@ def _train(dataset,
         if grad is not None:
             utils.summary_histogram('grad/{}'.format(grad.op.name), grad)
     utils.summary_scalar('global_step', global_step)
-
-    with tf.name_scope('visual'):
-        visual_inst_label = tf.py_func(
-            dutils.decode_labels, [inst_label_batch, num_visual_images, 21],
-            tf.uint8,
-            name='label')
-        values = [
-            image_batch[:num_visual_images], visual_inst_label,
-            ops.embedding(final_embedding, num_save_images=num_visual_images)
-        ]
-        tf.summary.image('images', tf.concat(axis=2, values=values))
+    visual_summary(predict_dict, gt_dict, num_visual_images)
 
     # Log training info
     brief_summary = tf.summary.merge_all('brief')
@@ -129,13 +157,17 @@ def _train(dataset,
         else:
             # Load pre-trained model
             initial_ckpt = train_config['restore_from']
+            not_restore_last = train_config['not_restore_last']
             if finetune == 0:
                 print('Initializing from pre-trained imagenet model...')
-                init_weights = model.restore_fn(initial_ckpt)
+                init_weights = model.restore_fn(
+                    initial_ckpt, not_restore_last=not_restore_last)
             else:
                 print('Initializing from specified pre-trained model...')
                 init_weights = model.restore_fn(
-                    initial_ckpt, from_embedding_checkpoint=True)
+                    initial_ckpt,
+                    from_embedding_checkpoint=True,
+                    not_restore_last=not_restore_last)
             init_weights(sess)
 
         print('Weights initialized')
@@ -252,7 +284,7 @@ def test(dataset, model_config, restore_from, result_path, loss_config=None):
 
     # Create the network
     model = builder.build_model(model_config)
-    predict_dict = model.build(model.preprocess(image_batch), is_training=True)
+    predict_dict = model.build(model.preprocess(image_batch), is_training=False)
     final_embedding = predict_dict['embedding']
 
     visual_embedding = ops.embedding(final_embedding, num_save_images=1)[0]

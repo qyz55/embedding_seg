@@ -60,8 +60,8 @@ class VggEmbeddingModel(meta.EmbeddingModel):
         if self._seg_branch_config['output_stride'] != 32:
             raise ValueError('Vgg does not support adjustable `output_stride`')
 
-    def build(self, preprocessed_img, is_training=True, scope=None):
-        """Build network and extract final embedding. """
+    def _extract_feature(self, preprocessed_img, is_training=True, scope=None):
+        """Build base network. """
         self.set_layer('input', preprocessed_img)
         with tf.variable_scope(self._feature_scope, 'embedding',
                                [preprocessed_img]):
@@ -70,14 +70,7 @@ class VggEmbeddingModel(meta.EmbeddingModel):
                     preprocessed_img,
                     build_full_model=self._seg_branch_config['use'])
                 self._end_points.update(end_points)
-                embedding = self._add_fusion_embedding(
-                    tf.shape(preprocessed_img)[1:3])
-        for key, val in self._end_points.items():
-            utils.summary_histogram('output/{}'.format(key), val)
-        res = {'embedding': embedding}
-        if self._seg_branch_config['use']:
-            res['seg_cls'] = net
-        return res
+        return net
 
     def preprocess(self, resized_inputs):
         """Preprocess fn for vgg net. """

@@ -1,3 +1,4 @@
+import sys
 from PIL import Image
 import numpy as np
 import tensorflow as tf
@@ -86,6 +87,8 @@ def decode_labels(masks, num_images=1, num_classes=21):
                     pixels[k_, j_] = pascal_voc_colour_map[k]
                 elif k == 255:
                     pixels[k_, j_] = (255,) * 3
+                else:
+                    print('Unexpected value: {}'.format(k), file=sys.stderr)
         return np.array(img)
 
     return _batch_map(_plot_image, masks[:num_images])

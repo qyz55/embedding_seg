@@ -5,17 +5,17 @@
         "data_list": "../experiments/data/imageset/voc12/train/train.txt",
         "num_reader": 4,
         "ignore_label": 255,
-        "input_size": [161, 161]
+        "input_size": [321, 321]
     },
 
     "train_config": {
-        "batch_size": 10,
+        "batch_size": 7,
         "optimizer_config": {
             "type": "Adam",
             "num_steps": 25000,
             "grad_clip_by_value": 0.0,
             "learning_rate": {
-                "base_lr": 1e-6
+                "base_lr": 1e-3
             }
         },
         "augment_config": {
@@ -24,9 +24,10 @@
             "random_mirror": false
         },
         "restore_from": "../experiments/checkpoints/resnet_v1_50.ckpt",
+        "not_restore_last": true,
         "loss_config": {
             "dense_siamese_loss": {
-                "use": true,
+                "use": false,
                 "kernel_size": [
                     [3, 3],
                     [3, 3],
@@ -56,11 +57,15 @@
                 "weight": 1.0
             },
             "pixel_neighbor_binary_loss": {
-                "use": false,
+                "use": true,
                 "kernel_size": [21, 21],
                 "strides": [1, 1],
                 "padding": [10, 10],
                 "dilation_rate": [1, 1],
+                "weight": 1.0
+            },
+            "semantic_seg_loss": {
+                "use": true,
                 "weight": 1.0
             },
             "weight_decay": 1e-6
@@ -85,6 +90,7 @@
                 "random_mirror": false
             },
             "restore_from": "../experiments/checkpoints/resnet_v1_50.ckpt",
+            "not_restore_last": false,
             "loss_config": {
                 "dense_siamese_loss": {
                     "use": true,
@@ -124,6 +130,10 @@
                     "dilation_rate": [1, 1],
                     "weight": 1.0
                 },
+                "semantic_seg_loss": {
+                    "use": false,
+                    "weight": 1.0
+                },
                 "weight_decay": 1e-6
             }
         }
@@ -131,13 +141,14 @@
 
     "model_config": {
         "model_name": "resnet50",
+        "is_training": true,
         "fusion_layers": ["input", "resnet_v1_50/block1", "resnet_v1_50/block2", "resnet_v1_50/block3"],
         "embedding_depth": 64,
         "seg_branch": {
             "use": false,
             "output_stride": 8,
-            "num_class": 440,
-            "weight": 1.0
+            "inst_num_classes": -1,
+            "cls_num_classes": -1
         }
     }
 }
