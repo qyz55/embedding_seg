@@ -200,8 +200,7 @@ def pixel_neighbor_binary_loss(loss_config,
         label = tf.concat(
             [label[..., :center_index], label[..., center_index + 1:]], axis=-1)
         label_binary = tf.to_float(tf.equal(label_center, label))
-        logits = tf.image.resize_nearest_neighbor(logits,
-                                                  tf.shape(inst_label)[1:3])
+        logits = tf.image.resize_bilinear(logits, tf.shape(inst_label)[1:3])
 
         valid_mask = tf.logical_not(
             tf.logical_or(
@@ -216,9 +215,9 @@ def pixel_neighbor_binary_loss(loss_config,
 
         # Accuracy.
         pred = tf.cast(tf.greater(logits_valid, 0), tf.uint8)
-        acc = tf.to_float(
-            tf.count_nonzero(tf.equal(pred, tf.cast(
-                label_valid, pred.dtype)))) / tf.to_float(tf.size(label_valid))
+        acc = tf.reduce_mean(
+            tf.cast(
+                tf.equal(pred, tf.cast(label_valid, pred.dtype)), tf.float32))
 
         utils.summary_scalar('acc', acc)
         utils.summary_histogram('pixel_instance', label_valid)
@@ -255,6 +254,15 @@ def semantic_seg_loss(loss_config, predict_dict, gt_dict, scope=None):
         cls_loss = loss_config['weight'] * tf.reduce_mean(
             tf.nn.sparse_softmax_cross_entropy_with_logits(
                 labels=label_valid, logits=logits_valid))
+
+        # Accuracy
+        pred = tf.argmax(logits_valid, axis=-1)
+        acc = tf.reduce_mean(
+            tf.cast(
+                tf.equal(pred, tf.cast(label_valid, pred.dtype)), tf.float32))
+
+        utils.summary_scalar('acc', acc)
+        utils.summary_histogram('cls_label', label_valid)
     return cls_loss
 
 
@@ -325,13 +333,16 @@ class EmbeddingModel(object, metaclass=ABCMeta):
     def restore_fn(self,
                    ckpt_path,
                    from_embedding_checkpoint=False,
-                   not_restore_last=False):
+                   not_restore_last=False,
+                   resume_training=False):
         """Initialize the network parameters from the pre-trained model.
 
         Args:
             ckpt_path: Path to the checkpoint.
             from_embedding_checkpoint: Whether restore from embedding's
                 checkpoint.
+            not_restore_last: Whether to restore logits layers.
+            resume_training: Whether to restore global steps.
 
         Returns:
             Function that takes a session and initializes the network.
@@ -341,6 +352,10 @@ class EmbeddingModel(object, metaclass=ABCMeta):
         if not_restore_last:
             all_variables = [
                 var for var in all_variables if 'logits' not in var.name
+            ]
+        if not resume_training:
+            all_variables = [
+                var for var in all_variables if 'step' not in var.name
             ]
         for variable in all_variables:
             var_name = variable.op.name

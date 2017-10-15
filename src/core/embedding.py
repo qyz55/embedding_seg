@@ -158,16 +158,22 @@ def _train(dataset,
             # Load pre-trained model
             initial_ckpt = train_config['restore_from']
             not_restore_last = train_config['not_restore_last']
+            from_embedding_checkpoint = train_config[
+                'from_embedding_checkpoint']
             if finetune == 0:
                 print('Initializing from pre-trained imagenet model...')
                 init_weights = model.restore_fn(
-                    initial_ckpt, not_restore_last=not_restore_last)
+                    initial_ckpt,
+                    from_embedding_checkpoint=from_embedding_checkpoint,
+                    not_restore_last=not_restore_last,
+                    resume_training=resume_training)
             else:
                 print('Initializing from specified pre-trained model...')
                 init_weights = model.restore_fn(
                     initial_ckpt,
                     from_embedding_checkpoint=True,
-                    not_restore_last=not_restore_last)
+                    not_restore_last=not_restore_last,
+                    resume_training=False)
             init_weights(sess)
 
         print('Weights initialized')

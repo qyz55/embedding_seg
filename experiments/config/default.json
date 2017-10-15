@@ -5,29 +5,34 @@
         "data_list": "../experiments/data/imageset/voc12/train/train.txt",
         "num_reader": 4,
         "ignore_label": 255,
-        "input_size": [321, 321]
+        "input_size": [161, 161]
     },
 
     "train_config": {
-        "batch_size": 7,
+        "batch_size": 6,
         "optimizer_config": {
-            "type": "Adam",
+            "type": "SGD",
             "num_steps": 25000,
             "grad_clip_by_value": 0.0,
             "learning_rate": {
-                "base_lr": 1e-3
-            }
+                "base_lr": 2.5e-4,
+                "decay_steps": [],
+                "decay_rate": 0.1
+            },
+            "momentum": 0.9,
+            "use_nesterov": false
         },
         "augment_config": {
             "random_scale": false,
             "random_crop": false,
             "random_mirror": false
         },
-        "restore_from": "../experiments/checkpoints/resnet_v1_50.ckpt",
+        "restore_from": "../experiments/checkpoints/seg/model.ckpt-25000",
         "not_restore_last": true,
+        "from_embedding_checkpoint": true,
         "loss_config": {
             "dense_siamese_loss": {
-                "use": false,
+                "use": true,
                 "kernel_size": [
                     [3, 3],
                     [3, 3],
@@ -54,10 +59,10 @@
                 "normalize": "none",
                 "ignore_bg_pos": true,
                 "data_balance": true,
-                "weight": 1.0
+                "weight": 0.3
             },
             "pixel_neighbor_binary_loss": {
-                "use": true,
+                "use": false,
                 "kernel_size": [21, 21],
                 "strides": [1, 1],
                 "padding": [10, 10],
@@ -68,20 +73,20 @@
                 "use": true,
                 "weight": 1.0
             },
-            "weight_decay": 1e-6
+            "weight_decay": 5e-4
         }
     },
 
     "eval_config": {
         "finetune": true,
         "eval_finetune_config": {
-            "batch_size": 10,
+            "batch_size": 6,
             "optimizer_config": {
                 "type": "Adam",
-                "num_steps": 200,
+                "num_steps": 400,
                 "grad_clip_by_value": 0.0,
                 "learning_rate": {
-                    "base_lr": 1e-6
+                    "base_lr": 2.5e-4
                 }
             },
             "augment_config": {
@@ -89,8 +94,9 @@
                 "random_crop": false,
                 "random_mirror": false
             },
-            "restore_from": "../experiments/checkpoints/resnet_v1_50.ckpt",
+            "restore_from": "../experiments/checkpoints/embedding_with_seg_more_block/model.ckpt-25000",
             "not_restore_last": false,
+            "from_embedding_checkpoint": true,
             "loss_config": {
                 "dense_siamese_loss": {
                     "use": true,
@@ -134,21 +140,21 @@
                     "use": false,
                     "weight": 1.0
                 },
-                "weight_decay": 1e-6
+                "weight_decay": 5e-4
             }
         }
     },
 
     "model_config": {
-        "model_name": "resnet50",
-        "is_training": true,
-        "fusion_layers": ["input", "resnet_v1_50/block1", "resnet_v1_50/block2", "resnet_v1_50/block3"],
+        "model_name": "resnet101",
+        "is_training": false,
+        "fusion_layers": ["input", "resnet_v1_101/block1", "resnet_v1_101/block2", "resnet_v1_101/block3", "resnet_v1_101/block4"],
         "embedding_depth": 64,
         "seg_branch": {
-            "use": false,
+            "use": true,
             "output_stride": 8,
             "inst_num_classes": -1,
-            "cls_num_classes": -1
+            "cls_num_classes": 21
         }
     }
 }

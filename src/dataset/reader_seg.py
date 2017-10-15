@@ -35,12 +35,27 @@ def read_labeled_image_list(data_dir, data_list):
 
 
 def decode_label(path_tf):
+    """Read file disregard pallete. """
 
     def aux(path):
         img = Image.open(path)
         return np.expand_dims(np.array(img), -1).astype(np.uint8)
 
     res = tf.py_func(aux, [path_tf], tf.uint8)
+    res.set_shape([None, None, 1])
+    return res
+
+
+def inst2binary(label_tf, ignore_label=255):
+    """Convert instance label into binary mask. """
+
+    def aux(label):
+        label = label.copy()
+        indices = np.logical_and(label != 0, label != ignore_label)
+        label[indices] = 1
+        return label
+
+    res = tf.py_func(aux, [label_tf], tf.uint8)
     res.set_shape([None, None, 1])
     return res
 
@@ -76,6 +91,7 @@ class ImageSegmentReader(ImageReader):
                 augmentation.
             is_training: Whether to shuffle data.
         """
+        self.dataset_name = input_config['dataset_name']
         self.data_dir = input_config['data_dir']
         self.data_list = input_config['data_list']
         self.input_size = input_config['input_size']
@@ -91,6 +107,11 @@ class ImageSegmentReader(ImageReader):
             shuffle=is_training)
         self.image, self.class_label, self.inst_label = read_images_from_disk(
             self.queue)
+
+        if self.dataset_name == 'davis2016' or self.dataset_name == 'davis2017':
+            # davis dataset does not have semantic label, so convert them into
+            # fg/bg mask.
+            self.class_label = inst2binary(self.inst_label, self.ignore_label)
 
     def __len__(self):
         return len(self.image_list)
