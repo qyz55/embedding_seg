@@ -215,11 +215,17 @@ def pixel_neighbor_binary_loss(loss_config,
 
         # Accuracy.
         pred = tf.cast(tf.greater(logits_valid, 0), tf.uint8)
-        acc = tf.reduce_mean(
-            tf.cast(
-                tf.equal(pred, tf.cast(label_valid, pred.dtype)), tf.float32))
+        equal_binary = tf.cast(
+            tf.equal(pred, tf.cast(label_valid, pred.dtype)), tf.float32)
+        acc = tf.reduce_mean(equal_binary)
+        acc_pos = tf.reduce_mean(
+            tf.boolean_mask(equal_binary, tf.equal(label_valid, 1)))
+        acc_neg = tf.reduce_mean(
+            tf.boolean_mask(equal_binary, tf.equal(label_valid, 0)))
 
         utils.summary_scalar('acc', acc)
+        utils.summary_scalar('acc_pos', acc_pos)
+        utils.summary_scalar('acc_neg', acc_neg)
         utils.summary_histogram('pixel_instance', label_valid)
     return cls_loss
 
@@ -351,7 +357,8 @@ class EmbeddingModel(object, metaclass=ABCMeta):
         all_variables = tf.global_variables()
         if not_restore_last:
             all_variables = [
-                var for var in all_variables if 'logits' not in var.name
+                var for var in all_variables
+                if 'inst' not in var.name and 'cls' not in var.name
             ]
         if not resume_training:
             all_variables = [

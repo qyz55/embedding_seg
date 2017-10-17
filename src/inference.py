@@ -94,7 +94,7 @@ if use_finetune:
             input_config, augment_config, is_training=True)
 
     global_step = slim.create_global_step()
-    embedding.train_parent(
+    embedding.train_finetune(
         dataset,
         model_config,
         train_config,
@@ -112,7 +112,7 @@ with tf.Graph().as_default():
     else:
         ckpt_path = train_config['restore_from']
 
-    input_config = utils.construct_dataset(args.input_base_dir, content[1:],
+    input_config = utils.construct_dataset(args.input_base_dir, content,
                                            os.path.join(snapshot_dir,
                                                         'eval_data_list.txt'))
     with tf.name_scope("create_inputs_eval"):
