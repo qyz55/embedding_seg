@@ -286,7 +286,12 @@ def test(dataset, model_config, restore_from, result_path, loss_config=None):
     # Prepare the input data
     image_batch, cls_label_batch, inst_label_batch = dataset.dequeue(
         1, num_threads=1)
-    gt_dict = {'cls_label': cls_label_batch, 'inst_label': inst_label_batch}
+    gt_dict = {
+        'image': image_batch,
+        'cls_label': cls_label_batch,
+        'inst_label': inst_label_batch
+    }
+
 
     # Create the network
     model = builder.build_model(model_config)
@@ -298,6 +303,7 @@ def test(dataset, model_config, restore_from, result_path, loss_config=None):
 
     if loss_config is not None:  # summary
         model.loss(loss_config, predict_dict, gt_dict)
+        visual_summary(predict_dict, gt_dict, 1)
 
         summary_writer = tf.summary.FileWriter(
             result_path, graph=tf.get_default_graph())
