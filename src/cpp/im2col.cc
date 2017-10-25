@@ -235,12 +235,15 @@ class Im2ColGradOp : public OpKernel {
                                         input_size.shape().DebugString()));
 
     int batch_size = output_grad.dim_size(0);
-    int height, width, channels, wsize;
+    auto Tinput_size = input_size.vec<int>();
+    int ih, iw, oh, ow, channels, wsize;
     if (data_format_ == "NCHW") {
       channels = output_grad.dim_size(1);
       wsize = output_grad.dim_size(2);
-      height = output_grad.dim_size(3);
-      width = output_grad.dim_size(4);
+      oh = output_grad.dim_size(3);
+      ow = output_grad.dim_size(4);
+      ih = Tinput_size(2);
+      iw = Tinput_size(3);
     } else if (data_format_ == "NHWC") {
       throw std::runtime_error("Not Implemented");
     } else {
@@ -251,30 +254,30 @@ class Im2ColGradOp : public OpKernel {
                 errors::InvalidArgument("wsize does not match",
                                         output_grad.shape().DebugString()));
 
-    auto Tinput_size = input_size.vec<int>();
-    TensorShape output_shape;
+    TensorShape input_shape;
     OP_REQUIRES_OK(context, TensorShapeUtils::MakeShape(input_size.vec<int32>(),
-                                                        &output_shape));
-    Tensor *output = nullptr;
-    OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &output));
+                                                        &input_shape));
+    Tensor *input_grad = nullptr;
+    OP_REQUIRES_OK(context,
+                   context->allocate_output(0, input_shape, &input_grad));
 
     auto Toutput_grad = output_grad.tensor<T, 5>();
-    auto Tinput_grad = output->tensor<T, 4>();
+    auto Tinput_grad = input_grad->tensor<T, 4>();
 
     auto col_data = Toutput_grad.data();
     auto im_data = Tinput_grad.data();
 
-    const int input_batch_dim = channels * wsize * height * width;
-    int output_batch_dim = 1;
+    const int col_batch_dim = channels * wsize * oh * ow;
+    int input_grad_batch_dim = 1;
     for (int i = 1; i < input_size.NumElements(); ++i) {
-      output_batch_dim *= Tinput_size(i);
+      input_grad_batch_dim *= Tinput_size(i);
     }
     for (int b = 0; b < batch_size; ++b) {
       caffe::col2im(context->eigen_device<Device>(),
-                    col_data + input_batch_dim * b, channels, height, width,
+                    col_data + col_batch_dim * b, channels, ih, iw,
                     kernel_size_[0], kernel_size_[1], padding_[0], padding_[1],
                     strides_[0], strides_[1], dilation_rate_[0],
-                    dilation_rate_[1], im_data + b * output_batch_dim);
+                    dilation_rate_[1], im_data + b * input_grad_batch_dim);
     }
   }
 
