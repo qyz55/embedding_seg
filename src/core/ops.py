@@ -5,11 +5,11 @@ import numpy as np
 import tensorflow as tf
 from sklearn.decomposition import PCA
 import utils
-
+'''
 libembedding_path = os.path.join(
     os.path.dirname(os.path.realpath(__file__)), 'libembedding.so')
 libembedding = tf.load_op_library(libembedding_path)
-
+'''
 
 def get_shape_list(tensor):
     return tensor.get_shape().as_list()
@@ -136,6 +136,10 @@ def embedding(tensor, num_save_images=2, method="pca", epsilon=1e-8):
     else:
         raise ValueError(
             "Unknown dimension reduction method: {}".format(method))
+
+    utils.summary_histogram('pca', tensor[..., 0])
+    with tf.control_dependencies([tf_print(tensor[0,150:160, 150:160, 0])]):
+        tensor = tf_print(tensor)
     tmin, tmax = tf.reduce_min(tensor), tf.reduce_max(tensor)
     result = tf.cast((result - tmin) / (tmax - tmin + epsilon) * 255.0,
                      tf.uint8)
@@ -153,3 +157,66 @@ def pca_np(array, num_images, reduced_dim=3):
         result = pca.fit_transform(array[i].reshape([-1, c])).reshape([h, w, 3])
         output[i] = np.array(result)
     return output
+
+def pick_k(inputs, k, max_instance, ignore_label = 255):
+    b, h, w, c = inputs.shape
+    result = np.zeros([b, max_instance, k], dtype = np.int32)
+    num = np.zeros([b], dtype = np.int32)
+    size = np.zeros([b, max_instance], dtype = np.int32)
+    for s in range(b):
+        g = inputs[s].reshape(-1)
+        num_inst = np.unique(g)
+        num_inst = [x for x in num_inst if x != ignore_label]
+        num_tmp = len(num_inst)
+        j = 0
+        for i in range(num_tmp):
+            col = np.where(g == num_inst[i])
+            if (len(col[0]) >= k):
+                ck = np.random.choice(col[0], k, False)
+                result[s, j, :] = ck[:]
+                size[s, j] = len(col[0])
+                j = j + 1
+        num[s] = j
+    return result, num, size
+
+
+
+def random_pick_k(inputs, k, max_instance = 20):
+    """Pick k points from each instace including background.
+    
+    Args:
+        inpus: [b, h, w, 1] tensor of image mask.
+        k: points to be picked from each instnce.
+        max_instance: the max instances in an image.
+
+    Returns:
+        A [b, max_instance, k] tensor, blank part(instance order
+        that exceeds current number of instances) filled with -1.
+        A [b] tensor, each element represents the number of instances in a picture.
+        A [b, max_instance] tensor, the size of each instance.
+    """
+    b, h, w, c = inputs.shape
+    [b, h, w, c] = [b.value, h.value, w.value, c.value]
+    assert c == 1
+
+    re, nu, si = tf.py_func(pick_k, [inputs, k, max_instance], [tf.int32, tf.int32, tf.int32], False, 'pick_k')
+
+    '''
+        arr = tf.range(0,max_instance + 1, 1)
+        result = tf.ones([b, max_instance, k, 2], dtype = tf.int32) * (-1)
+        for i in range(b):
+            g = tf.reshape(inputs[i],[-1])
+            num_inst, _ = tf.unique(g)
+            print(tf.shape(num_inst).value)
+            print(num_inst.shape)
+            length = num_inst.get_shape()[0].value
+            for j in range(length):
+                col = tf.reshape(tf.where(tf.equal(g,arr[j])),-1)
+                if (col.shape[0].value >= k):
+                    ck, _, _ = tf.nn.uniform_candidate_sampler(tf.expand_dims(col, axis = 0), col.shape[0].value, k, True, col.shape[0].value)
+                    results[i, j, :, 0] = ck[:] // w
+                    results[i, j, :, 1] = ck[:] % w
+    '''
+    return re, nu, si
+
+

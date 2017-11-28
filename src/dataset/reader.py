@@ -6,7 +6,7 @@ import tensorflow as tf
 class ImageReader(object, metaclass=ABCMeta):
     """Abstract base class for image reader.  """
 
-    def dequeue(self, num_elements, num_threads=4):
+    def dequeue(self, num_elements, num_threads=1):
         """Pack images and masks into a batch.
 
         Args:

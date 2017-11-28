@@ -113,13 +113,15 @@ def _train(dataset,
                 for grad in grads
             ]
         train_op = opt.apply_gradients(
-            zip(grads, all_variables), global_step=global_step)
+        	    zip(grads, all_variables), global_step=global_step)
 
     for var in slim.get_model_variables():
         utils.summary_histogram('weight/{}'.format(var.op.name), var)
+    '''
     for grad in grads:
         if grad is not None:
             utils.summary_histogram('grad/{}'.format(grad.op.name), grad)
+    '''
     utils.summary_scalar('global_step', global_step)
     visual_summary(predict_dict, gt_dict, num_visual_images)
 
@@ -198,8 +200,7 @@ def _train(dataset,
                 batch_loss, summary, _ = sess.run(
                     [total_loss, all_summary, train_op])
             else:
-                batch_loss, summary, _ = sess.run([total_loss, brief_summary] +
-                                                  [train_op])
+                batch_loss, summary, _ = sess.run([total_loss, brief_summary] + [train_op])
             summary_writer.add_summary(summary, step)
 
             current_time = time.time()

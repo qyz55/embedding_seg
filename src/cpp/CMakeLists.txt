@@ -15,11 +15,15 @@ message(STATUS ${CUDA_NVCC_FLAGS})
 
 
 # TensorFlow dependencies
-SET(TF_INC "/home/jrmei/.local/lib/python2.7/site-packages/tensorflow/include")
+SET(TF_INC "/usr/local/lib/python3.4/dist-packages/tensorflow/include")
 
 # target
 include_directories(${TF_INC})
 cuda_add_library(embedding SHARED
+    im2dis.cc
+    im2dis_caffe.cc
+    im2dis_caffe.cc.cu
+    im2dis_caffe.h
     im2col.cc
     im2col_caffe.cc
     im2col_caffe.cc.cu

@@ -58,7 +58,7 @@ def get_arguments():
 
 args = get_arguments()
 utils.copy_to(args.json_config, args.snapshot_dir)
-with open(args.json_config, 'rb') as f:
+with open(args.json_config, 'r') as f:
     config = json.load(f)
 pprint(vars(args))
 pprint(config)
