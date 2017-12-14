@@ -136,10 +136,12 @@ def embedding(tensor, num_save_images=2, method="pca", epsilon=1e-8):
     else:
         raise ValueError(
             "Unknown dimension reduction method: {}".format(method))
-
+    
     utils.summary_histogram('pca', tensor[..., 0])
+    '''
     with tf.control_dependencies([tf_print(tensor[0,150:160, 150:160, 0])]):
         tensor = tf_print(tensor)
+    '''
     tmin, tmax = tf.reduce_min(tensor), tf.reduce_max(tensor)
     result = tf.cast((result - tmin) / (tmax - tmin + epsilon) * 255.0,
                      tf.uint8)

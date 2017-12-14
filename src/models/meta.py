@@ -301,24 +301,23 @@ def k_points_cls_loss(loss_config, predict_dict, gt_dict, scope=None):
             points_valid = tf.reshape(tf.boolean_mask(point_list[i] ,mask), [-1])
             size_valid = tf.cast(tf.reshape(tf.boolean_mask(m_size[i], mask) ,[-1]),tf.float64)
             emb = tf.reshape(embeddings[i], [h*w,c])
+            diag = tf.cast(tf.reshape(1-tf.matrix_diag(tf.ones([inst_num * loss_config['points_k']],dtype = tf.float64)), [-1]),tf.bool)
             pre = tf.cast(tf.gather(emb, points_valid, axis = 0),tf.float64)
             la = tf.reshape(label[i],[h*w])
             lg = tf.cast(tf.gather(la, points_valid, axis = 0), tf.int32)
-            print(ops.get_shape_list(tf.expand_dims(pre, 0)- tf.expand_dims(pre, 1)))
-            pairs_emb = tf.cast(tf.norm(tf.reshape(tf.subtract(tf.expand_dims(pre, 0) , tf.expand_dims(pre,1)), [-1,c]), 
-                                                                  ord = 2, axis = 1, keep_dims = False),tf.float64)
+            pre1 = tf.boolean_mask(tf.reshape(tf.expand_dims(pre, 0) - tf.expand_dims(pre,1), [-1,c]), diag)
+            pairs_emb = tf.norm(pre1, ord = loss_config['norm_ord'], axis = 1, keep_dims = False)
             pairs_lab = tf.cast(tf.reshape(tf.equal(tf.expand_dims(lg, 0) - tf.expand_dims(lg,1), 0), [-1]),tf.float64)
-            sig = 2 / (1 + tf.exp(tf.pow(pairs_emb,2)))
-            diag = tf.cast(tf.reshape(1-tf.matrix_diag(tf.ones([inst_num * loss_config['points_k']],dtype = tf.float64)), [-1]),tf.bool)
+            sigma = 2 / (1.1 + tf.exp(tf.minimum(tf.pow(pairs_emb,2), 10)))
             pairs_label = tf.boolean_mask(pairs_lab, diag)
-            sigma = tf.boolean_mask(sig, diag)
             nk = tf.reshape(tf.stack([size_valid for j in range (loss_config['points_k'])],1),[-1])
             omega = 1 / tf.sqrt(tf.boolean_mask(tf.reshape(tf.expand_dims(nk, 0) * tf.expand_dims(nk,1), [-1]), diag))
             omega_norm = omega / tf.reduce_sum(omega)
-            k_loss = k_loss - tf.reduce_sum(omega_norm * (pairs_label * tf.log(sigma) + (1 - pairs_label) * tf.log(1-sigma)))
-            gg = tf.gradients(k_loss,[omega_norm, omega, sigma, pairs_emb, pre])
+            k_loss = k_loss - tf.reduce_sum(omega_norm * (pairs_label * tf.log(sigma) + (1 - pairs_label) * tf.log(1-sigma))) / (tf.cast(inst_num, tf.float64) * loss_config['points_k'])
+            gg = tf.gradients(k_loss,[omega_norm, omega, sigma, pairs_emb, pre1, pre])
             utils.summary_detailed_scalar('pairs_emb', pairs_emb)
             utils.summary_detailed_scalar('pre', pre)
+            utils.summary_detailed_scalar('pre1', pre1)
             utils.summary_detailed_scalar('omega_norm', omega_norm)
             utils.summary_detailed_scalar('omega', omega)
             utils.summary_detailed_scalar('sigma', sigma)
@@ -373,10 +372,10 @@ class EmbeddingModel(object, metaclass=ABCMeta):
             feature, self._seg_branch_config['inst_num_classes'], scope='inst')
         cls_logits = self._add_dense_prediction(
             feature, self._seg_branch_config['cls_num_classes'], scope='cls')
-
+        
         for key, val in self._end_points.items():
             utils.summary_histogram('output/{}'.format(key), val)
-
+        
         return {
             'feature': feature,
             'embedding': embedding,

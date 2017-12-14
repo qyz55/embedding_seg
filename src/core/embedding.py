@@ -114,14 +114,14 @@ def _train(dataset,
             ]
         train_op = opt.apply_gradients(
         	    zip(grads, all_variables), global_step=global_step)
-
+    
     for var in slim.get_model_variables():
         utils.summary_histogram('weight/{}'.format(var.op.name), var)
-    '''
+    
     for grad in grads:
         if grad is not None:
             utils.summary_histogram('grad/{}'.format(grad.op.name), grad)
-    '''
+    
     utils.summary_scalar('global_step', global_step)
     visual_summary(predict_dict, gt_dict, num_visual_images)
 
