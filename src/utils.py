@@ -40,8 +40,7 @@ def get_variables_available_in_checkpoint(variables, checkpoint_path):
             vars_in_ckpt[variable_name] = variable
         else:
             print(
-                'Variable [%s] not available in checkpoint',
-                variable_name,
+                'Variable [%s] not available in checkpoint'%variable_name,
                 file=sys.stderr)
     if isinstance(variables, list):
         return vars_in_ckpt.values()

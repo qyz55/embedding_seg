@@ -1,0 +1,61 @@
+{
+    "train_input_config": {
+        "data_dir": "/data/VOCdevkit/VOC2012",
+        "data_list": "../experiments/data/imageset/voc12/train/trivial.txt",
+        "num_reader": 4,
+        "ignore_label": 255,
+        "input_size": [161, 161]
+    },
+
+    "train_config": {
+        "batch_size": 10,
+        "optimizer_config": {
+            "type": "Adam",
+            "num_steps": 4000,
+            "grad_clip_by_value": 0.0,
+            "learning_rate": {
+                "base_lr": 1e-6
+            }
+        },
+        "augment_config": {
+            "random_scale": false,
+            "random_crop": false,
+            "random_mirror": false
+        },
+        "restore_from": "../experiments/checkpoints/resnet_v1_101.ckpt",
+        "loss_config": {
+            "kernel_size": [
+                [3, 3],
+                [3, 3],
+                [3, 3]
+            ],
+            "strides": [
+                [1, 1],
+                [1, 1],
+                [1, 1]
+            ],
+            "padding": [
+                [1, 1],
+                [2, 2],
+                [5, 5]
+            ],
+            "dilation_rate": [
+                [1, 1],
+                [2, 2],
+                [5, 5]
+            ],
+            "alpha": 0.5,
+            "beta": 1.2,
+            "norm_ord": 1,
+            "normalize": "none",
+            "data_balance": false,
+            "weight_decay": 1e-6
+        }
+    },
+
+    "model_config": {
+        "model_name": "resnet101",
+        "fusion_layers": ["input", "resnet_v1_101/block1", "resnet_v1_101/block2", "resnet_v1_101/block3"],
+        "embedding_depth": 64
+    }
+}

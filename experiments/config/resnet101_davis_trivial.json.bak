@@ -1,0 +1,106 @@
+{
+    "train_input_config": {
+        "data_dir": "../experiments/data/DAVIS2017",
+        "data_list": "../experiments/data/imageset/davis/train.txt",
+        "num_reader": 4,
+        "ignore_label": 255,
+        "input_size": [161, 161]
+    },
+
+    "train_config": {
+        "batch_size": 10,
+        "optimizer_config": {
+            "type": "Adam",
+            "num_steps": 1000,
+            "grad_clip_by_value": 0.0,
+            "learning_rate": {
+                "base_lr": 1e-6
+            }
+        },
+        "augment_config": {
+            "random_scale": true,
+            "random_crop": true,
+            "random_mirror": true
+        },
+        "restore_from": "../experiments/checkpoints/resnet_v1_101.ckpt",
+        "loss_config": {
+            "kernel_size": [
+                [3, 3],
+                [3, 3],
+                [3, 3]
+            ],
+            "strides": [
+                [1, 1],
+                [1, 1],
+                [1, 1]
+            ],
+            "padding": [
+                [1, 1],
+                [2, 2],
+                [5, 5]
+            ],
+            "dilation_rate": [
+                [1, 1],
+                [2, 2],
+                [5, 5]
+            ],
+            "alpha": 0.5,
+            "beta": 1.2,
+            "norm_ord": 1,
+            "normalize": "none",
+            "data_balance": false,
+            "weight_decay": 1e-6
+        }
+    },
+
+    "eval_config": {
+        "finetune": true,
+        "eval_finetune_config": {
+            "batch_size": 10,
+            "optimizer_config": {
+                "type": "Adam",
+                "num_steps": 200,
+                "grad_clip_by_value": 0.0,
+                "learning_rate": {
+                    "base_lr": 1e-6
+                }
+            },
+            "augment_config": {
+                "random_scale": false,
+                "random_crop": false,
+                "random_mirror": false
+            },
+            "restore_from": "../experiments/checkpoints/embedding_resnet101_2017.09.29-21.07.14/model.ckpt-0",
+            "loss_config": {
+                "kernel_size": [
+                    [3, 3],
+                    [3, 3]
+                ],
+                "strides": [
+                    [1, 1],
+                    [1, 1]
+                ],
+                "padding": [
+                    [2, 2],
+                    [5, 5]
+                ],
+                "dilation_rate": [
+                    [2, 2],
+                    [5, 5]
+                ],
+                "alpha": 0.5,
+                "beta": 1.2,
+                "norm_ord": 1,
+                "normalize": "l2",
+                "data_balance": true,
+                "weight_decay": 1e-6
+            }
+        }
+    },
+
+    "model_config": {
+        "model_name": "resnet101",
+        "fusion_layers": ["input", "resnet_v1_101/block1", "resnet_v1_101/block2", "resnet_v1_101/block3"],
+        "embedding_depth": 64
+    }
+}

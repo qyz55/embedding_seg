@@ -5,11 +5,11 @@ import numpy as np
 import tensorflow as tf
 from sklearn.decomposition import PCA
 import utils
-'''
+
 libembedding_path = os.path.join(
     os.path.dirname(os.path.realpath(__file__)), 'libembedding.so')
 libembedding = tf.load_op_library(libembedding_path)
-'''
+
 
 def get_shape_list(tensor):
     return tensor.get_shape().as_list()
@@ -201,7 +201,7 @@ def random_pick_k(inputs, k, max_instance = 20):
     [b, h, w, c] = [b.value, h.value, w.value, c.value]
     assert c == 1
 
-    re, nu, si = tf.py_func(pick_k, [inputs, k, max_instance], [tf.int32, tf.int32, tf.int32], False, 'pick_k')
+    re, nu, si = tf.py_func(pick_k, [inputs, k, max_instance], [tf.int32, tf.int32, tf.int32], stateful = True, name = 'pick_k')
 
     '''
         arr = tf.range(0,max_instance + 1, 1)

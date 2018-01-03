@@ -82,6 +82,7 @@ class ResnetEmbeddingModel(meta.EmbeddingModel):
         with tf.variable_scope(self._feature_scope, 'embedding',
                                [preprocessed_img]):
             with slim.arg_scope(resnet_v1.resnet_arg_scope()):
+                print (is_training)
                 net, end_points = self._architecture(
                     preprocessed_img,
                     num_block=4 if self._seg_branch_config['use'] else 3,

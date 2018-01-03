@@ -243,7 +243,6 @@ def semantic_seg_loss(loss_config, predict_dict, gt_dict, scope=None):
     Returns:
         A scalar of segmentation loss.
     """
-    print(loss_config)
     if not loss_config['use']:
         return 0.0
 
@@ -287,48 +286,31 @@ def k_points_cls_loss(loss_config, predict_dict, gt_dict, scope=None):
         return 0.0
 
     embeddings = predict_dict['embedding']
-    label = gt_dict['cls_label']
-    utils.summary_detailed_scalar('label', label)
-    k_loss = tf.zeros([], dtype = tf.float64)
+    label = gt_dict['inst_label']
+    k_loss = tf.zeros([], dtype = tf.float32)
     with tf.name_scope(scope, 'k_points_cls_loss', [embeddings, label]):
         b, h, w, c = ops.get_shape_list(embeddings)
-        b2, h2, w2, c2 = ops.get_shape_list(label)
-        assert (b, h, w) == (b2, h2, w2)
-        utils.summary_detailed_scalar('emb', embeddings)
-        utils.summary_detailed_scalar('emb0', tf.slice(embeddings, [0,0,0,0], [1,h,w,1]))
         point_list, inst_nums, m_size = ops.random_pick_k(label, loss_config['points_k'], loss_config['max_instance'])
         for i in range(b):
             inst_num = inst_nums[i]
             mask = tf.cast(tf.concat([tf.ones([inst_num], dtype = tf.int32), tf.zeros([loss_config['max_instance'] - inst_num], dtype = tf.int32)],0), tf.bool)
             points_valid = tf.reshape(tf.boolean_mask(point_list[i] ,mask), [-1])
-            size_valid = tf.cast(tf.reshape(tf.boolean_mask(m_size[i], mask) ,[-1]),tf.float64)
+            size_valid = tf.cast(tf.reshape(tf.boolean_mask(m_size[i], mask) ,[-1]),tf.float32)
             emb = tf.reshape(embeddings[i], [h*w,c])
-            diag = tf.cast(tf.reshape(1-tf.matrix_diag(tf.ones([inst_num * loss_config['points_k']],dtype = tf.float64)), [-1]),tf.bool)
-            utils.summary_detailed_scalar('points_valid', points_valid)
-            pre = tf.cast(tf.gather(emb, points_valid, axis = 0),tf.float64)
+            pre = tf.gather(emb, points_valid, axis = 0)
             la = tf.reshape(label[i],[h*w])
             lg = tf.cast(tf.gather(la, points_valid, axis = 0), tf.int32)
-            pre1 = tf.boolean_mask(tf.reshape(tf.expand_dims(pre, 0) - tf.expand_dims(pre,1), [-1,c]), diag)
-            pairs_emb = tf.cast(tf.norm(pre1, ord = loss_config['norm_ord'], axis = 1, keep_dims = False),tf.float64)
-            pairs_lab = tf.cast(tf.reshape(tf.equal(tf.expand_dims(lg, 0) - tf.expand_dims(lg,1), 0), [-1]),tf.float64)
-            
-            pairs_label = tf.boolean_mask(pairs_lab, diag)
+            pairs_emb = tf.norm(tf.reshape(tf.expand_dims(pre, 0) - tf.expand_dims(pre,1), [-1,c]), ord = 2, axis = 1, keep_dims = False)
+            pairs_label = tf.cast(tf.reshape(tf.equal(tf.expand_dims(lg, 0) - tf.expand_dims(lg,1), 0), [-1]),tf.float32)
+            sigma = 2 / (1 + tf.exp(pairs_emb * pairs_emb))
+            diag = tf.reshape(1-tf.matrix_diag(tf.ones([inst_num * loss_config['points_k']],dtype = tf.float32)), [-1])
             nk = tf.reshape(tf.stack([size_valid for j in range (loss_config['points_k'])],1),[-1])
-            omega = 1 / tf.sqrt(tf.boolean_mask(tf.reshape(tf.expand_dims(nk, 0) * tf.expand_dims(nk,1), [-1]), diag))
-            omega_norm = omega / tf.reduce_sum(omega)
-            tmp = pairs_label*tf.log(tf.constant(2.0, dtype = tf.float64)) \
-		 +(1-pairs_label)*tf.log(1-0.9*tf.exp(-pairs_emb))-tf.log(1+1.1*tf.exp(-pairs_emb))
-            k_loss = k_loss - tf.reduce_sum(omega_norm * (tmp)) / (tf.cast(inst_num, tf.float64) * loss_config['points_k'])
-            gg = tf.gradients(k_loss,[omega_norm, omega, pairs_emb, pre1, pre])
-            utils.summary_detailed_scalar('pairs_emb', pairs_emb)
-            utils.summary_detailed_scalar('pre', pre)
-            utils.summary_detailed_scalar('pre1', pre1)
-            utils.summary_detailed_scalar('omega_norm', omega_norm)
-            utils.summary_detailed_scalar('omega', omega)
-            utils.summary_detailed_scalar('pairs_label', pairs_label)
-            for j in range(len(gg)):
-                if gg[j] is not None:
-                    utils.summary_detailed_scalar('Grad'+str(i)+str(j),gg[j])
+            omega = (1 / tf.reshape(tf.expand_dims(nk, 0) * tf.expand_dims(nk,1), [-1])) * diag
+            tp = tf.reduce_sum(omega)
+            print(tp)
+            omega_norm = omega / tp
+            k_loss = k_loss - 
+tf.reduce_sum(omega_norm * (pairs_label * tf.log(sigma) + (1 - pairs_label) * tf.log(1-sigma)))
     return k_loss * loss_config['weight']
 
 class EmbeddingModel(object, metaclass=ABCMeta):
@@ -376,10 +358,10 @@ class EmbeddingModel(object, metaclass=ABCMeta):
             feature, self._seg_branch_config['inst_num_classes'], scope='inst')
         cls_logits = self._add_dense_prediction(
             feature, self._seg_branch_config['cls_num_classes'], scope='cls')
-        
+
         for key, val in self._end_points.items():
             utils.summary_histogram('output/{}'.format(key), val)
-        
+
         return {
             'feature': feature,
             'embedding': embedding,
@@ -440,25 +422,23 @@ class EmbeddingModel(object, metaclass=ABCMeta):
     def loss(self, loss_config, predict_dict, gt_dict):
         """Compute loss for embedding model. """
         with tf.name_scope('loss'):
-            embedding_loss = multi_scale_dense_siamese_loss(
-                loss_config['dense_siamese_loss'], predict_dict, gt_dict)
-            kp_loss = k_points_cls_loss(
+            #embedding_loss = multi_scale_dense_siamese_loss(
+            #    loss_config['dense_siamese_loss'], predict_dict, gt_dict)
+            embedding_loss = k_points_cls_loss(
                 loss_config['k_points_cls_loss'], predict_dict, gt_dict)
             inst_cls_loss = pixel_neighbor_binary_loss(
                 loss_config['pixel_neighbor_binary_loss'], predict_dict,
                 gt_dict)
-            print(loss_config['semantic_seg_loss'])
             seg_cls_loss = semantic_seg_loss(loss_config['semantic_seg_loss'],
                                              predict_dict, gt_dict)
             l2_loss = weight_l2_loss(loss_config['weight_decay'])
-            total_loss = tf.cast(kp_loss,tf.float32) + embedding_loss + l2_loss + inst_cls_loss + seg_cls_loss
+            total_loss = embedding_loss + l2_loss + inst_cls_loss + seg_cls_loss
 
             utils.summary_scalar('l2_loss', l2_loss)
             utils.summary_scalar('inst_cls_loss', inst_cls_loss)
             utils.summary_scalar('seg_cls_loss', seg_cls_loss)
             utils.summary_scalar('embedding_loss', embedding_loss)
             utils.summary_scalar('total_loss', total_loss)
-            utils.summary_scalar('kp_loss', kp_loss)
         return total_loss
 
     def _add_fusion_embedding(self, embedding_size, scope=None, scale=5.0):
@@ -468,7 +448,7 @@ class EmbeddingModel(object, metaclass=ABCMeta):
                          seed=None,
                          dtype=tf.float32,
                          partition_info=None):
-            return tf.truncated_normal(shape, 0.0, 1e-3, seed=seed, dtype=dtype)
+            return tf.truncated_normal(shape, 0.0, 1e-6, seed=seed, dtype=dtype)
 
         if len(self._fusion_layers) == 0:
             return
